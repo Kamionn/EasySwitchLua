@@ -1,20 +1,20 @@
 # EasySwitchLua
 
-Un système de switch avancé et performant pour Lua avec gestion d'événements, middleware et cache optimisé.
+An advanced and performant switch system for Lua with event handling, middleware, and optimized caching.
 
 ## ⚡ Installation
 
 ```lua
--- Copier les fichiers dans votre projet
+-- Copy files into your project
 local Switch = require("easyswitch")
 ```
 
-## 🚀 Utilisation Simple
+## 🚀 Basic Usage
 
 ```lua
 local Switch = require("easyswitch")
 
--- Création d'un switch basique
+-- Creating a basic switch
 local menuSwitch = Switch("menu")
     :when("start", function()
         return "Game started"
@@ -26,12 +26,12 @@ local menuSwitch = Switch("menu")
         return "Unknown action: " .. action
     end)
 
--- Utilisation
+-- Usage
 print(menuSwitch:execute("start"))  -- "Game started"
 print(menuSwitch:execute("quit"))   -- "Game ended"
 print(menuSwitch:execute("other"))  -- "Unknown action: other"
 
--- Cas multiples
+-- Multiple cases
 local commandSwitch = Switch("commands")
     :when({"save", "backup"}, function(action)
         return "Saving game..."
@@ -41,12 +41,12 @@ print(commandSwitch:execute("save"))    -- "Saving game..."
 print(commandSwitch:execute("backup"))  -- "Saving game..."
 ```
 
-## 🔥 Fonctionnalités Avancées
+## 🔥 Advanced Features
 
 ### Middleware
 ```lua
 local authSwitch = Switch("auth")
-    -- Transformation des entrées
+    -- Input transformation
     :use(function(action)
         return string.upper(action)
     end)
@@ -60,15 +60,15 @@ print(authSwitch:execute("login"))  -- "Logging in..."
 ### Events (Debug/Logging)
 ```lua
 local debugSwitch = Switch("debug")
-    -- Avant exécution
+    -- Before execution
     :on("beforeExecute", function(value)
         print("Executing:", value)
     end)
-    -- Après exécution
+    -- After execution
     :on("afterExecute", function(value, result)
         print("Result:", result)
     end)
-    -- En cas d'erreur
+    -- On error
     :on("error", function(type, err)
         print("Error in", type .. ":", err)
     end)
@@ -79,13 +79,13 @@ local debugSwitch = Switch("debug")
 debugSwitch:execute("test")
 ```
 
-### Cache Automatique
-Le système met automatiquement en cache les résultats avec une gestion intelligente de la mémoire via les pairs.
+### Automatic Caching
+The system automatically caches results with intelligent memory management using pairs.
 
 ```lua
 local expensiveSwitch = Switch("expensive")
     :when("calc", function()
-        -- Opération coûteuse
+        -- Expensive operation
         local result = 0
         for i = 1, 1000000 do
             result = result + i
@@ -93,9 +93,9 @@ local expensiveSwitch = Switch("expensive")
         return result
     end)
 
--- Premier appel : calcule
+-- First call: calculates
 print(expensiveSwitch:execute("calc"))
--- Deuxième appel : utilise le cache
+-- Second call: uses cache
 print(expensiveSwitch:execute("calc"))
 ```
 
@@ -103,22 +103,22 @@ print(expensiveSwitch:execute("calc"))
 
 ```lua
 local switch = Switch("config", {
-    maxCases = 1000  -- Limite de cas (défaut: 100)
+    maxCases = 1000  -- Case limit (default: 100)
 })
 ```
 
-## 📋 Events Disponibles
+## 📋 Available Events
 
-- `beforeExecute` : Avant l'exécution
-- `afterExecute` : Après l'exécution
-- `error` : En cas d'erreur
-- `cacheHit` : Cache trouvé
-- `cacheMiss` : Cache manqué
-- `middlewareStart` : Début du middleware
-- `middlewareEnd` : Fin du middleware
-- `noMatch` : Pas de correspondance
+- `beforeExecute`: Before execution
+- `afterExecute`: After execution
+- `error`: On error
+- `cacheHit`: Cache found
+- `cacheMiss`: Cache not found
+- `middlewareStart`: Middleware start
+- `middlewareEnd`: Middleware end
+- `noMatch`: No match found
 
-## 🎮 Exemple Complet (State Machine)
+## 🎮 Complete Example (State Machine)
 
 ```lua
 local gameState = {
@@ -127,16 +127,16 @@ local gameState = {
 }
 
 local gameSwitch = Switch("game")
-    -- Middleware pour logging
+    -- Middleware for logging
     :use(function(action)
         print("Game action:", action)
         return action
     end)
-    -- Events pour debug
+    -- Events for debug
     :on("beforeExecute", function(action)
         print("Current state - Score:", gameState.score, "Lives:", gameState.lives)
     end)
-    -- Actions du jeu
+    -- Game actions
     :when("start", function()
         gameState.score = 0
         gameState.lives = 3
@@ -154,23 +154,23 @@ local gameSwitch = Switch("game")
         return "UNKNOWN_ACTION"
     end)
 
--- Simulation de jeu
-print(gameSwitch:execute("start"))    -- Reset et commence
+-- Game simulation
+print(gameSwitch:execute("start"))    -- Reset and start
 print(gameSwitch:execute("score"))    -- Score +100
-print(gameSwitch:execute("hit"))      -- Perd une vie
+print(gameSwitch:execute("hit"))      -- Lose a life
 ```
 
 ## 🔧 Performance
 
-Le système utilise plusieurs optimisations :
-- Cache avec pairs pour gestion automatique de la mémoire
-- Compilation des middlewares
-- Minimisation des lookups
-- Chaînage des méthodes fluide
+The system uses several optimizations:
+- Cache with pairs for automatic memory management
+- Middleware compilation
+- Lookup minimization
+- Fluent method chaining
 
-## 🤝 Contribution
+## 🤝 Contributing
 
-Les contributions sont bienvenues ! N'hésitez pas à ouvrir une issue ou une pull request.
+Contributions are welcome! Feel free to open an issue or submit a pull request.
 
 ## 📄 License
 
