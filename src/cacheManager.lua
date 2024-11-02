@@ -5,12 +5,12 @@ function CacheManager.new(eventManager)
     
     return {
         get = function(value)
-            for k, v in pairs(cache) do -- bv SUP2Ak
-                if k == value then
-                    eventManager.emit("cacheHit", value, v)
-                    return v
-                end
+            if cache[value] then
+                local v = cache[value]
+                eventManager.emit("cacheHit", value, v)
+                return v
             end
+
             eventManager.emit("cacheMiss", value)
             return nil
         end,
