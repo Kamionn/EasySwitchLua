@@ -1,6 +1,6 @@
 --[[
     EasySwitchLua
-    Un système de switch avancé et performant pour Lua
+    An advanced and efficient switch system for Lua
     
     Usage:
     local Switch = require("easyswitch")
@@ -24,13 +24,13 @@ local CacheManager = require("src.cacheManager")
 local function Switch(name, options)
     options = options or {}
     
-    -- Initialisation des managers
+    -- Manager initialization
     local eventManager = EventManager.new()
     local middlewareManager = MiddlewareManager.new(eventManager)
     local actionManager = ActionManager.new(options.maxCases)
     local cacheManager = CacheManager.new(eventManager)
     
-    -- Construction du switch
+    -- Constructing the switch
     local switch = {}
     
     -- API Events
@@ -56,28 +56,28 @@ local function Switch(name, options)
         return self
     end
     
-    -- Exécution
+    -- Execution
     function switch:execute(value)
         eventManager.emit("beforeExecute", value)
         
-        -- Vérification du cache
+        -- Check cache
         local cached = cacheManager.get(value)
         if cached ~= nil then
             eventManager.emit("afterExecute", value, cached)
             return cached
         end
         
-        -- Application des middlewares
+        -- Apply middlewares
         local final_value = middlewareManager.execute(value)
         
-        -- Exécution de l'action
+        -- Execute action
         local success, result = pcall(actionManager.execute, final_value)
         if not success then
             eventManager.emit("error", "action", result)
             result = nil
         end
         
-        -- Cache et retour
+        -- Cache and return result
         if result ~= nil then
             cacheManager.set(value, result)
         end
@@ -86,7 +86,7 @@ local function Switch(name, options)
         return result
     end
     
-    -- Méthodes utilitaires
+    -- Utility methods
     function switch:clearCache()
         cacheManager.clear()
         return self
