@@ -1,8 +1,8 @@
 local CacheManager = {}
 
 function CacheManager.new(eventManager)
-    local cache = setmetatable({}, {__mode = "kv"}) 
-    
+    local cache = setmetatable({}, {__mode = "kv"})
+
     return {
         get = function(value)
             if cache[value] then
@@ -14,13 +14,13 @@ function CacheManager.new(eventManager)
             eventManager.emit("cacheMiss", value)
             return nil
         end,
-        
+
         set = function(value, result)
             if result ~= nil then
                 cache[value] = result
             end
         end,
-        
+
         clear = function()
             cache = setmetatable({}, {__mode = "kv"})
         end
