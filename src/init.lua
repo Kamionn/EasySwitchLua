@@ -1,3 +1,4 @@
+
 local EventManager = require("src.eventManager")
 local MiddlewareManager = require("src.middlewareManager")
 local ActionManager = require("src.actionManager")
@@ -6,15 +7,17 @@ local CacheManager = require("src.cacheManager")
 local function Switch(name, options)
     options = options or {}
 
-    -- Manager initialization
+    -- Initialize managers
     local eventManager = EventManager.new()
     local middlewareManager = MiddlewareManager.new(eventManager)
     local actionManager = ActionManager.new(options.maxCases)
     local cacheManager = CacheManager.new(eventManager)
 
-    -- Constructing the switch
+    -- Build the switch
     local switch = {}
-    
+
+    local beforeCheck = function() return true end
+
     -- API Events
     function switch:on(event, callback)
         eventManager.on(event, callback)
@@ -38,31 +41,43 @@ local function Switch(name, options)
         return self
     end
 
+    -- API Before
+    function switch:before(checkFunction)
+        beforeCheck = checkFunction or beforeCheck
+        return self
+    end
+
     -- Execution
     function switch:execute(value)
         eventManager.emit("beforeExecute", value)
 
-        -- Check cache
+        -- Check the cache
         local cached = cacheManager.get(value)
         if cached ~= nil then
             eventManager.emit("afterExecute", value, cached)
             return cached
         end
 
+        if not beforeCheck(value) then
+            eventManager.emit("beforeCheckFailed", value)
+            return nil
+        end
+
         -- Apply middlewares
         local final_value = middlewareManager.execute(value)
 
-        -- Execute action
+        -- Execute the action
         local success, result = pcall(actionManager.execute, final_value)
         if not success then
             eventManager.emit("error", "action", result)
             result = nil
         end
 
-        -- Cache and return result
+        -- Cache and return
         if result ~= nil then
             cacheManager.set(value, result)
         end
+
         eventManager.emit("afterExecute", value, result)
         return result
     end
