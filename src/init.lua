@@ -1,21 +1,3 @@
---[[
-    EasySwitchLua
-    An advanced and efficient switch system for Lua
-
-    Usage:
-    local Switch = require("easyswitch")
-
-    local menuSwitch = Switch("menu")
-        :when("start", function()
-            return "Game started"
-        end)
-        :when("quit", function()
-            return "Game ended"
-        end)
-
-    print(menuSwitch:execute("start"))
-]]
-
 local EventManager = require("src.eventManager")
 local MiddlewareManager = require("src.middlewareManager")
 local ActionManager = require("src.actionManager")
@@ -32,7 +14,7 @@ local function Switch(name, options)
 
     -- Constructing the switch
     local switch = {}
-
+    
     -- API Events
     function switch:on(event, callback)
         eventManager.on(event, callback)
@@ -81,7 +63,6 @@ local function Switch(name, options)
         if result ~= nil then
             cacheManager.set(value, result)
         end
-
         eventManager.emit("afterExecute", value, result)
         return result
     end
