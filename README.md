@@ -57,6 +57,25 @@ local authSwitch = Switch("auth")
 print(authSwitch:execute("login"))  -- "Logging in..."
 ```
 
+### Before Execution Checks
+```lua
+local secureSwitch = Switch("secure")
+    :before(function(action)
+        local allowedActions = { start = true, stop = true }
+        return allowedActions[action] ~= nil
+    end)
+    :when("start", function()
+        return "Starting secure process..."
+    end)
+    :when("stop", function()
+        return "Stopping secure process..."
+    end)
+
+print(secureSwitch:execute("start")) -- "Starting secure process..."
+print(secureSwitch:execute("invalid")) -- nil, before check fails
+```
+
+
 ### Events (Debug/Logging)
 ```lua
 local debugSwitch = Switch("debug")
