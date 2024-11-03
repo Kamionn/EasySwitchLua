@@ -1,10 +1,9 @@
-
 local EventManager = require("src.eventManager")
 local MiddlewareManager = require("src.middlewareManager")
 local ActionManager = require("src.actionManager")
 local CacheManager = require("src.cacheManager")
 
-local function Switch(name, options)
+local function SwitchInit(obj, name, options)
     options = options or {}
 
     -- Initialize managers
@@ -93,7 +92,23 @@ local function Switch(name, options)
         return self
     end
 
+    obj.registered[name] = switch
     return switch
+end
+
+local Switch = setmetatable({ registered = {} }, { __call = SwitchInit })
+
+function Switch:get(name)
+    return self.registered[name]
+end
+
+function Switch:clear(name)
+    if name then
+        self.registered[name] = nil
+    else
+        self.registered = {}
+    end
+    return self
 end
 
 return Switch
