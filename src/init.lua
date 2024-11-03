@@ -3,8 +3,13 @@ local MiddlewareManager = require("src.middlewareManager")
 local ActionManager = require("src.actionManager")
 local CacheManager = require("src.cacheManager")
 
-local function SwitchInit(obj, name, options)
-    options = options or {}
+local function SwitchInit(obj, name, _options)
+    if not name or obj.registered[name] then
+        error("Switch with id [" .. name .. "] already registered", 2)
+        return
+    end
+    
+    local options = _options or {}
 
     -- Initialize managers
     local eventManager = EventManager.new()
@@ -99,6 +104,20 @@ end
 local Switch = setmetatable({ registered = {} }, { __call = SwitchInit })
 
 function Switch:get(name)
+    if not next(self.registered) then
+        print('No switches registered')
+        return
+    end
+
+    if not name then
+        local switches, size = {}, 0
+        for k, v in pairs(self.registered) do
+            size += 1
+            switches[k] = v
+        end
+        return switches, size
+    end
+
     return self.registered[name]
 end
 
