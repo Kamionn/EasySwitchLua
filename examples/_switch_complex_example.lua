@@ -24,6 +24,12 @@ local gameSwitch = Switch("game", { maxCases = 50 })
         print("Middleware 2: Collecting stats:", value)
         return value
     end)
+    -- Before
+    :before(function(value)
+        print("Before check for value:", value)
+        local allowedActions = { start = true, pause = true, resume = true, quit = true }
+        return allowedActions[value] ~= nil
+    end)
     -- Game actions
     :when("start", function()
         return "Game started"
