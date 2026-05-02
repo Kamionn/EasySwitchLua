@@ -68,7 +68,7 @@ local function matchTagged(pattern, value, visited)
             return isInteger(value)
         end
         if name == "float" then
-            return type(value) == "number" and not isInteger(value)
+            return isFloat(value)
         end
         return type(value) == name
     end
