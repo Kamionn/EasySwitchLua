@@ -3,15 +3,15 @@ local Pattern = require("src.pattern")
 local ActionManager = {}
 
 function ActionManager.new(maxCases)
+    if maxCases ~= nil and (type(maxCases) ~= "number" or maxCases < 1) then
+        error("maxCases must be a positive number", 2)
+    end
+
     local dispatch = {}
     local patterns = {}
     local default_action
     local case_count = 0
     local max_cases = maxCases or 100
-
-    if type(max_cases) ~= "number" or max_cases < 1 then
-        error("maxCases must be a positive number", 2)
-    end
 
     local function addCase(value, action)
         if value == nil then
