@@ -4,18 +4,24 @@ local ActionManager = require("src.actionManager")
 local CacheManager = require("src.cacheManager")
 
 local function SwitchInit(obj, name, _options)
-    if not name or obj.registered[name] then
-        error("Switch with id [" .. name .. "] already registered", 2)
-        return
+    if not name then
+        error("Switch id is required", 2)
+    end
+
+    if obj.registered[name] then
+        error("Switch with id [" .. tostring(name) .. "] already registered", 2)
     end
 
     local options = _options or {}
+    local cacheEnabled = options.cache ~= false
 
     -- Initialize managers
     local eventManager = EventManager.new()
     local middlewareManager = MiddlewareManager.new(eventManager)
     local actionManager = ActionManager.new(options.maxCases)
-    local cacheManager = CacheManager.new(eventManager)
+    local cacheManager = CacheManager.new(eventManager, {
+        weak = options.weakCache == true
+    })
 
     -- Build the switch
     local switch = {}
@@ -31,23 +37,30 @@ local function SwitchInit(obj, name, _options)
     -- API Actions
     function switch:when(cases, action)
         actionManager.add(cases, action)
+        cacheManager.clear()
         return self
     end
 
     function switch:default(action)
         actionManager.setDefault(action)
+        cacheManager.clear()
         return self
     end
 
     -- API Middleware
     function switch:use(middleware)
         middlewareManager.add(middleware)
+        cacheManager.clear()
         return self
     end
 
     -- API Before
     function switch:before(checkFunction)
+        if checkFunction ~= nil and type(checkFunction) ~= "function" then
+            error("Before check must be a function", 2)
+        end
         beforeCheck = checkFunction or beforeCheck
+        cacheManager.clear()
         return self
     end
 
@@ -55,34 +68,46 @@ local function SwitchInit(obj, name, _options)
     function switch:execute(value)
         eventManager.emit("beforeExecute", value)
 
-        -- Check the cache
-        local cached = cacheManager.get(value)
-        if cached ~= nil then
-            eventManager.emit("afterExecute", value, cached)
-            return cached
+        local beforeSuccess, beforeResult = pcall(beforeCheck, value)
+        if not beforeSuccess then
+            eventManager.emit("error", "before", beforeResult)
+            eventManager.emit("afterExecute", value, nil)
+            return nil
         end
 
-        if not beforeCheck(value) then
+        if not beforeResult then
             eventManager.emit("beforeCheckFailed", value)
+            eventManager.emit("afterExecute", value, nil)
             return nil
         end
 
         -- Apply middlewares
         local final_value = middlewareManager.execute(value)
 
+        -- Check the cache after validation and middlewares so they still run.
+        if cacheEnabled then
+            local cached = cacheManager.get(final_value)
+            if cached ~= nil then
+                eventManager.emit("afterExecute", value, cached, final_value)
+                return cached
+            end
+        end
+
         -- Execute the action
-        local success, result = pcall(actionManager.execute, final_value)
+        local success, result, matched = pcall(actionManager.execute, final_value)
         if not success then
             eventManager.emit("error", "action", result)
             result = nil
+        elseif not matched then
+            eventManager.emit("noMatch", final_value)
         end
 
         -- Cache and return
-        if result ~= nil then
-            cacheManager.set(value, result)
+        if cacheEnabled and result ~= nil then
+            cacheManager.set(final_value, result)
         end
 
-        eventManager.emit("afterExecute", value, result)
+        eventManager.emit("afterExecute", value, result, final_value)
         return result
     end
 
@@ -112,7 +137,7 @@ function Switch:get(name)
     if not name then
         local switches, size = {}, 0
         for k, v in pairs(self.registered) do
-            size += 1
+            size = size + 1
             switches[k] = v
         end
         return switches, size
