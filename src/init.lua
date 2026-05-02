@@ -13,6 +13,9 @@ local function SwitchInit(obj, name, _options)
     end
 
     local options = _options or {}
+    if type(options) ~= "table" then
+        error("Switch options must be a table", 2)
+    end
     local cacheEnabled = options.cache ~= false
 
     -- Initialize managers
