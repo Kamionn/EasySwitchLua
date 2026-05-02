@@ -134,11 +134,6 @@ end
 local Switch = setmetatable({ registered = {}, P = Pattern }, { __call = SwitchInit })
 
 function Switch:get(name)
-    if not next(self.registered) then
-        print('No switches registered')
-        return
-    end
-
     if not name then
         local switches, size = {}, 0
         for k, v in pairs(self.registered) do
