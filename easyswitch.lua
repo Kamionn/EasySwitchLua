@@ -1,2 +1,1 @@
-package.path = package.path .. ";./src/?.lua"
-return require("init")
+return require("src.init")
