@@ -58,6 +58,63 @@ local authSwitch = Switch("auth")
 print(authSwitch:execute("login"))  -- "Logging in..."
 ```
 
+## Pattern Matching
+
+`when()` accepts pattern descriptors in addition to literal values. Literal values keep the fast exact-match behavior. Pattern rules are checked after exact matches, in the order they were added.
+
+```lua
+local Switch = require("easyswitch")
+local P = Switch.P
+
+local shapeSwitch = Switch("shapes")
+    :when({ kind = "circle" }, function(shape)
+        return math.pi * shape.r ^ 2
+    end)
+    :when({ kind = "square" }, function(shape)
+        return shape.s ^ 2
+    end)
+    :when(P.string, function(value)
+        return tonumber(value)
+    end)
+    :default(function()
+        error("unhandled shape")
+    end)
+
+print(shapeSwitch:execute({ kind = "circle", r = 2 }))
+print(shapeSwitch:execute("42"))
+```
+
+Available pattern helpers:
+
+- `P.string`, `P.number`, `P.boolean`, `P.integer`, `P.float`
+- `P.when(fn)`: matches when `fn(value)` returns a truthy value
+- `P.any_of(...)`: matches the first successful pattern
+- `P.not_(pattern)`: negates a pattern
+- `P.array(itemPattern)`: matches an array where every item matches `itemPattern`
+
+Partial table patterns match recursively:
+
+```lua
+local eventSwitch = Switch("events")
+    :when({
+        type = "player",
+        payload = {
+            action = P.any_of("join", "leave")
+        }
+    }, function(event)
+        return event.payload.action
+    end)
+```
+
+Multiple cases can mix literals and pattern descriptors:
+
+```lua
+local valueSwitch = Switch("values")
+    :when({ "ping", P.integer }, function(value)
+        return value
+    end)
+```
+
 ## Before Checks
 
 ```lua
@@ -112,6 +169,8 @@ Available events:
 ## Caching
 
 Caching is enabled by default. The cache is checked after `before()` and middleware execution, so validation and transformations still run. Cache entries are cleared when actions, middleware, default action, or before checks are changed.
+
+Results produced by pattern rules are not cached. This avoids returning the same cached result for two different values that match the same structure.
 
 Disable caching for actions with side effects, such as state machines, counters, database writes, or game state mutations:
 
