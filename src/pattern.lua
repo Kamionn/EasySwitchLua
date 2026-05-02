@@ -23,7 +23,11 @@ local function frozenTagged(kind, data)
 end
 
 local function isInteger(value)
-    return type(value) == "number" and value % 1 == 0
+    return math.type(value) == "integer"
+end
+
+local function isFloat(value)
+    return math.type(value) == "float"
 end
 
 local function isArrayTable(value)
