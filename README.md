@@ -1,20 +1,19 @@
 # EasySwitchLua
 
-An advanced and performant switch system for Lua with event handling, middleware, and optimized caching.
+An advanced switch helper for Lua with event hooks, middleware, optional result caching, and fluent method chaining.
 
-## ⚡ Installation
+## Installation
 
 ```lua
--- Copy files into your project
+-- Copy the files into your project.
 local Switch = require("easyswitch")
 ```
 
-## 🚀 Basic Usage
+## Basic Usage
 
 ```lua
 local Switch = require("easyswitch")
 
--- Creating a basic switch
 local menuSwitch = Switch("menu")
     :when("start", function()
         return "Game started"
@@ -26,14 +25,16 @@ local menuSwitch = Switch("menu")
         return "Unknown action: " .. action
     end)
 
--- Usage
 print(menuSwitch:execute("start"))  -- "Game started"
 print(menuSwitch:execute("quit"))   -- "Game ended"
 print(menuSwitch:execute("other"))  -- "Unknown action: other"
+```
 
--- Multiple cases
+## Multiple Cases
+
+```lua
 local commandSwitch = Switch("commands")
-    :when({"save", "backup"}, function(action)
+    :when({ "save", "backup" }, function(action)
         return "Saving game..."
     end)
 
@@ -41,12 +42,12 @@ print(commandSwitch:execute("save"))    -- "Saving game..."
 print(commandSwitch:execute("backup"))  -- "Saving game..."
 ```
 
-## 🔥 Advanced Features
+## Middleware
 
-### Middleware
+Middlewares run before dispatch and can transform the value used to find the action.
+
 ```lua
 local authSwitch = Switch("auth")
-    -- Input transformation
     :use(function(action)
         return string.upper(action)
     end)
@@ -57,7 +58,8 @@ local authSwitch = Switch("auth")
 print(authSwitch:execute("login"))  -- "Logging in..."
 ```
 
-### Before Execution Checks
+## Before Checks
+
 ```lua
 local secureSwitch = Switch("secure")
     :before(function(action)
@@ -71,25 +73,22 @@ local secureSwitch = Switch("secure")
         return "Stopping secure process..."
     end)
 
-print(secureSwitch:execute("start")) -- "Starting secure process..."
-print(secureSwitch:execute("invalid")) -- nil, before check fails
+print(secureSwitch:execute("start"))   -- "Starting secure process..."
+print(secureSwitch:execute("invalid")) -- nil
 ```
 
+## Events
 
-### Events (Debug/Logging)
 ```lua
 local debugSwitch = Switch("debug")
-    -- Before execution
     :on("beforeExecute", function(value)
         print("Executing:", value)
     end)
-    -- After execution
-    :on("afterExecute", function(value, result)
+    :on("afterExecute", function(value, result, finalValue)
         print("Result:", result)
     end)
-    -- On error
-    :on("error", function(type, err)
-        print("Error in", type .. ":", err)
+    :on("error", function(kind, err)
+        print("Error in", kind .. ":", err)
     end)
     :when("test", function()
         return "test ok"
@@ -98,46 +97,47 @@ local debugSwitch = Switch("debug")
 debugSwitch:execute("test")
 ```
 
-### Automatic Caching
-The system automatically caches results with intelligent memory management using pairs.
+Available events:
+
+- `beforeExecute`: before validation, middleware, cache, and dispatch
+- `afterExecute`: after execution, cache hit, failed before check, or handled error
+- `error`: when a before check, middleware, action, or event callback fails
+- `cacheHit`: cached result found
+- `cacheMiss`: cached result not found
+- `middlewareStart`: middleware chain starts
+- `middlewareEnd`: middleware chain ends
+- `beforeCheckFailed`: `before()` returned false or nil
+- `noMatch`: no action and no default handler matched the final value
+
+## Caching
+
+Caching is enabled by default. The cache is checked after `before()` and middleware execution, so validation and transformations still run. Cache entries are cleared when actions, middleware, default action, or before checks are changed.
+
+Disable caching for actions with side effects, such as state machines, counters, database writes, or game state mutations:
 
 ```lua
-local expensiveSwitch = Switch("expensive")
-    :when("calc", function()
-        -- Expensive operation
-        local result = 0
-        for i = 1, 1000000 do
-            result = result + i
-        end
-        return result
-    end)
-
--- First call: calculates
-print(expensiveSwitch:execute("calc"))
--- Second call: uses cache
-print(expensiveSwitch:execute("calc"))
+local stateSwitch = Switch("state", { cache = false })
 ```
 
-## ⚙️ Configuration
+You can opt into weak cache storage:
 
 ```lua
-local switch = Switch("config", {
-    maxCases = 1000  -- Case limit (default: 100)
+local switch = Switch("weak-cache", {
+    weakCache = true
 })
 ```
 
-## 📋 Available Events
+## Configuration
 
-- `beforeExecute`: Before execution
-- `afterExecute`: After execution
-- `error`: On error
-- `cacheHit`: Cache found
-- `cacheMiss`: Cache not found
-- `middlewareStart`: Middleware start
-- `middlewareEnd`: Middleware end
-- `noMatch`: No match found
+```lua
+local switch = Switch("config", {
+    maxCases = 1000, -- Case limit. Default: 100.
+    cache = true,    -- Enable result caching. Default: true.
+    weakCache = false
+})
+```
 
-## 🎮 Complete Example (State Machine)
+## Complete Example
 
 ```lua
 local gameState = {
@@ -145,17 +145,14 @@ local gameState = {
     lives = 3
 }
 
-local gameSwitch = Switch("game")
-    -- Middleware for logging
+local gameSwitch = Switch("game", { cache = false })
     :use(function(action)
         print("Game action:", action)
         return action
     end)
-    -- Events for debug
     :on("beforeExecute", function(action)
         print("Current state - Score:", gameState.score, "Lives:", gameState.lives)
     end)
-    -- Game actions
     :when("start", function()
         gameState.score = 0
         gameState.lives = 3
@@ -169,28 +166,15 @@ local gameSwitch = Switch("game")
         gameState.score = gameState.score + 100
         return "PLAYING"
     end)
-    :default(function(action)
+    :default(function()
         return "UNKNOWN_ACTION"
     end)
 
--- Game simulation
-print(gameSwitch:execute("start"))    -- Reset and start
-print(gameSwitch:execute("score"))    -- Score +100
-print(gameSwitch:execute("hit"))      -- Lose a life
+print(gameSwitch:execute("start"))
+print(gameSwitch:execute("score"))
+print(gameSwitch:execute("hit"))
 ```
 
-## 🔧 Performance
+## License
 
-The system uses several optimizations:
-- Cache with pairs for automatic memory management
-- Middleware compilation
-- Lookup minimization
-- Fluent method chaining
-
-## 🤝 Contributing
-
-Contributions are welcome! Feel free to open an issue or submit a pull request.
-
-## 📄 License
-
-[MIT License](LICENSE.md)
+[MIT License](LICENSE)
