@@ -3,8 +3,11 @@ local Pattern = {}
 local TAG = "__easyswitch_pattern"
 
 local function freeze(t)
-    return setmetatable(t, {
+    return setmetatable({}, {
+        __index = t,
         __newindex = function() error("Pattern is readonly", 2) end,
+        __pairs = function() return pairs(t) end,
+        __len = function() return #t end,
         __metatable = false
     })
 end
