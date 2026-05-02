@@ -43,8 +43,8 @@ function EventManager.new()
                             print("Event error:", err)
                         end
                         for j = 1, #errorCallbacks do
-                            local handled = pcall(errorCallbacks[j], "event", err)
-                            if not handled then
+                            local handlerOk = pcall(errorCallbacks[j], "event", err)
+                            if not handlerOk then
                                 print("Event error:", err)
                             end
                         end
