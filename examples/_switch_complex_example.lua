@@ -14,7 +14,8 @@ local menuSwitch = Switch("menu") -- No need for :new(), Switch is already a con
     end)
 
 -- Example 2: Advanced switch for game logic
-local gameSwitch = Switch("game", { maxCases = 50 })
+-- Cache is disabled because this switch mutates game state and logs each call.
+local gameSwitch = Switch("game", { maxCases = 50, cache = false })
     -- Middleware for processing
     :use(function(value)
         print("Middleware 1: Logging action:", value)
@@ -52,11 +53,8 @@ gameSwitch
     :on("afterExecute", function(value, result)
         print("After execution:", value, "->", result)
     end)
-    :on("error", function(type, err)
-        print("Error in", type .. ":", err)
-    end)
-    :on("cacheHit", function(value, cached)
-        print("Cache hit for:", value)
+    :on("error", function(kind, err)
+        print("Error in", kind .. ":", err)
     end)
 
 -- Tests and demonstration
@@ -66,17 +64,17 @@ print(menuSwitch:execute("quit"))  -- "Game ended"
 print(menuSwitch:execute("other")) -- "Unknown action: other"
 
 print("\n=== Test Game Switch ===")
--- First call (without cache)
+-- First call
 print(gameSwitch:execute("start"))
 
--- Second call (with cache)
+-- Second call runs the switch again because cache is disabled.
 print(gameSwitch:execute("start"))
 
 -- Test multiple cases
 print(gameSwitch:execute("pause"))
 print(gameSwitch:execute("resume"))
 
--- Clear cache and test
+-- Clear cache is still available and chainable.
 gameSwitch:clearCache()
 print("\n=== After Cache Clear ===")
 print(gameSwitch:execute("start"))
