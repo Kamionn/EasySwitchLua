@@ -188,6 +188,8 @@ local switch = Switch("weak-cache", {
 })
 ```
 
+`weakCache` only matters when the dispatched value is a table — Lua does not garbage-collect strings, numbers, or booleans, so weak entries keyed on primitives behave identically to a regular cache.
+
 ## Configuration
 
 ```lua
