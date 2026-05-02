@@ -9,15 +9,22 @@ function EventManager.new()
         cacheMiss = {},
         middlewareStart = {},
         middlewareEnd = {},
+        beforeCheckFailed = {},
         noMatch = {}
     }
 
     return {
         on = function(event, callback)
-            if events[event] then
-                local length = #events[event]
-                events[event][length + 1] = callback
+            if not events[event] then
+                error("Unknown event: " .. tostring(event), 2)
             end
+
+            if type(callback) ~= "function" then
+                error("Event callback must be a function", 2)
+            end
+
+            local length = #events[event]
+            events[event][length + 1] = callback
         end,
 
         emit = function(event, ...)
@@ -35,6 +42,9 @@ function EventManager.new()
 
         clear = function(event)
             if event then
+                if not events[event] then
+                    error("Unknown event: " .. tostring(event), 2)
+                end
                 events[event] = {}
             else
                 for k in pairs(events) do

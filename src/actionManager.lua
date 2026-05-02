@@ -6,6 +6,16 @@ function ActionManager.new(maxCases)
     local case_count = 0
     local max_cases = maxCases or 100
 
+    local function addCase(value, action)
+        if dispatch[value] == nil then
+            if case_count >= max_cases then
+                error("Too many cases", 3)
+            end
+            case_count = case_count + 1
+        end
+        dispatch[value] = action
+    end
+
     return {
         add = function(cases, action)
             if type(action) ~= "function" then
@@ -13,31 +23,25 @@ function ActionManager.new(maxCases)
             end
 
             if type(cases) ~= "table" then
-                if case_count >= max_cases then
-                    error("Too many cases", 2)
-                end
-                dispatch[cases] = action
-                case_count = case_count + 1
+                addCase(cases, action)
             else
                 local length = #cases
-                local new_count = case_count + length
-                if new_count > max_cases then
-                    error("Too many cases", 2)
-                end
                 for i = 1, length do
                     local value = cases[i]
-                    dispatch[value] = action
+                    addCase(value, action)
                 end
-                case_count = new_count
             end
         end,
 
         execute = function(value)
             local action = dispatch[value]
             if action then
-                return action(value)
+                return action(value), true
             end
-            return default_action and default_action(value)
+            if default_action then
+                return default_action(value), true
+            end
+            return nil, false
         end,
 
         setDefault = function(action)
