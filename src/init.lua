@@ -30,7 +30,8 @@ local function SwitchInit(obj, name, _options)
     -- Build the switch
     local switch = {}
 
-    local beforeCheck = function() return true end
+    local function defaultBeforeCheck() return true end
+    local beforeCheck = defaultBeforeCheck
 
     -- API Events
     function switch:on(event, callback)
