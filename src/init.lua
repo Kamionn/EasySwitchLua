@@ -69,7 +69,6 @@ local function SwitchInit(obj, name, _options)
         return self
     end
 
-    -- Execution
     function switch:execute(value)
         eventManager.emit("beforeExecute", value)
 
