@@ -2,25 +2,36 @@ local EventManager = require("src.eventManager")
 local MiddlewareManager = require("src.middlewareManager")
 local ActionManager = require("src.actionManager")
 local CacheManager = require("src.cacheManager")
+local Pattern = require("src.pattern")
 
 local function SwitchInit(obj, name, _options)
-    if not name or obj.registered[name] then
-        error("Switch with id [" .. name .. "] already registered", 2)
-        return
+    if not name then
+        error("Switch id is required", 2)
     end
-    
+
+    if obj.registered[name] then
+        error("Switch with id [" .. tostring(name) .. "] already registered", 2)
+    end
+
     local options = _options or {}
+    if type(options) ~= "table" then
+        error("Switch options must be a table", 2)
+    end
+    local cacheEnabled = options.cache ~= false
 
     -- Initialize managers
     local eventManager = EventManager.new()
     local middlewareManager = MiddlewareManager.new(eventManager)
     local actionManager = ActionManager.new(options.maxCases)
-    local cacheManager = CacheManager.new(eventManager)
+    local cacheManager = CacheManager.new(eventManager, {
+        weak = options.weakCache == true
+    })
 
     -- Build the switch
     local switch = {}
 
-    local beforeCheck = function() return true end
+    local function defaultBeforeCheck() return true end
+    local beforeCheck = defaultBeforeCheck
 
     -- API Events
     function switch:on(event, callback)
@@ -31,62 +42,75 @@ local function SwitchInit(obj, name, _options)
     -- API Actions
     function switch:when(cases, action)
         actionManager.add(cases, action)
+        cacheManager.clear()
         return self
     end
 
     function switch:default(action)
         actionManager.setDefault(action)
+        cacheManager.clear()
         return self
     end
 
     -- API Middleware
     function switch:use(middleware)
         middlewareManager.add(middleware)
+        cacheManager.clear()
         return self
     end
 
     -- API Before
     function switch:before(checkFunction)
-        beforeCheck = checkFunction or beforeCheck
+        if checkFunction ~= nil and type(checkFunction) ~= "function" then
+            error("Before check must be a function", 2)
+        end
+        beforeCheck = checkFunction or defaultBeforeCheck
+        cacheManager.clear()
         return self
     end
 
-    -- Execution
     function switch:execute(value)
         eventManager.emit("beforeExecute", value)
 
-        -- Check the cache
-        local cached = cacheManager.get(value)
-        if cached ~= nil then
-            eventManager.emit("afterExecute", value, cached)
-            return cached
-        end
-
-        if not beforeCheck(value) then
-            eventManager.emit("beforeCheckFailed", value)
+        local beforeSuccess, beforeResult = pcall(beforeCheck, value)
+        if not beforeSuccess then
+            eventManager.emit("error", "before", beforeResult)
+            eventManager.emit("afterExecute", value, nil, nil)
             return nil
         end
 
-        -- Apply middlewares
-        local final_value = middlewareManager.execute(value)
+        if not beforeResult then
+            eventManager.emit("beforeCheckFailed", value)
+            eventManager.emit("afterExecute", value, nil, nil)
+            return nil
+        end
 
-        -- Execute the action
-        local success, result = pcall(actionManager.execute, final_value)
+        local finalValue = middlewareManager.execute(value)
+
+        if cacheEnabled then
+            local cached = cacheManager.get(finalValue)
+            if cached ~= nil then
+                eventManager.emit("afterExecute", value, cached, finalValue)
+                return cached
+            end
+        end
+
+        local success, result, matched, cacheable = pcall(actionManager.execute, finalValue)
         if not success then
             eventManager.emit("error", "action", result)
             result = nil
+        elseif not matched then
+            eventManager.emit("noMatch", finalValue)
         end
 
-        -- Cache and return
-        if result ~= nil then
-            cacheManager.set(value, result)
+        if cacheEnabled and cacheable ~= false and result ~= nil then
+            cacheManager.set(finalValue, result)
         end
 
-        eventManager.emit("afterExecute", value, result)
+        eventManager.emit("afterExecute", value, result, finalValue)
         return result
     end
 
-    -- Utility methods
     function switch:clearCache()
         cacheManager.clear()
         return self
@@ -101,18 +125,13 @@ local function SwitchInit(obj, name, _options)
     return switch
 end
 
-local Switch = setmetatable({ registered = {} }, { __call = SwitchInit })
+local Switch = setmetatable({ registered = {}, P = Pattern }, { __call = SwitchInit })
 
 function Switch:get(name)
-    if not next(self.registered) then
-        print('No switches registered')
-        return
-    end
-
     if not name then
         local switches, size = {}, 0
         for k, v in pairs(self.registered) do
-            size += 1
+            size = size + 1
             switches[k] = v
         end
         return switches, size
@@ -122,7 +141,7 @@ function Switch:get(name)
 end
 
 function Switch:clear(name)
-    if name then
+    if name ~= nil then
         self.registered[name] = nil
     else
         self.registered = {}

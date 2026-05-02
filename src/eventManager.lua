@@ -9,15 +9,22 @@ function EventManager.new()
         cacheMiss = {},
         middlewareStart = {},
         middlewareEnd = {},
+        beforeCheckFailed = {},
         noMatch = {}
     }
 
     return {
         on = function(event, callback)
-            if events[event] then
-                local length = #events[event]
-                events[event][length + 1] = callback
+            if not events[event] then
+                error("Unknown event: " .. tostring(event), 2)
             end
+
+            if type(callback) ~= "function" then
+                error("Event callback must be a function", 2)
+            end
+
+            local length = #events[event]
+            events[event][length + 1] = callback
         end,
 
         emit = function(event, ...)
@@ -28,13 +35,29 @@ function EventManager.new()
                 local callback = array[i]
                 local success, err = pcall(callback, ...)
                 if not success then
-                    print("Event error:", err)
+                    if event == "error" then
+                        print("Event error:", err)
+                    else
+                        local errorCallbacks = events.error
+                        if #errorCallbacks == 0 then
+                            print("Event error:", err)
+                        end
+                        for j = 1, #errorCallbacks do
+                            local handlerOk = pcall(errorCallbacks[j], "event", err)
+                            if not handlerOk then
+                                print("Event error:", err)
+                            end
+                        end
+                    end
                 end
             end
         end,
 
         clear = function(event)
             if event then
+                if not events[event] then
+                    error("Unknown event: " .. tostring(event), 2)
+                end
                 events[event] = {}
             else
                 for k in pairs(events) do
