@@ -76,13 +76,13 @@ local function SwitchInit(obj, name, _options)
         local beforeSuccess, beforeResult = pcall(beforeCheck, value)
         if not beforeSuccess then
             eventManager.emit("error", "before", beforeResult)
-            eventManager.emit("afterExecute", value, nil)
+            eventManager.emit("afterExecute", value, nil, nil)
             return nil
         end
 
         if not beforeResult then
             eventManager.emit("beforeCheckFailed", value)
-            eventManager.emit("afterExecute", value, nil)
+            eventManager.emit("afterExecute", value, nil, nil)
             return nil
         end
 
