@@ -131,6 +131,18 @@ test("frozen pattern singletons cannot be mutated (#10)", function()
     assertFalse(ok)
 end)
 
+test("Pattern table itself is frozen", function()
+    local ok = pcall(function() Switch.P.string = "lol" end)
+    assertFalse(ok)
+end)
+
+test("tagged() does not mutate input data", function()
+    local input = { name = "string" }
+    local before = input.name
+    local _ = P.when(function() return true end)
+    assertEq(input.name, before)
+end)
+
 test("cyclic table pattern does not infinite loop (#11)", function()
     local p = { kind = "x" }
     p.self = p
