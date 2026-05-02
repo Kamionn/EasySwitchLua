@@ -112,7 +112,6 @@ local function SwitchInit(obj, name, _options)
         return result
     end
 
-    -- Utility methods
     function switch:clearCache()
         cacheManager.clear()
         return self
