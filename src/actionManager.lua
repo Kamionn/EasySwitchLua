@@ -1,5 +1,7 @@
 local Pattern = require("src.pattern")
 
+local DEFAULT_MAX_CASES = 100
+
 local ActionManager = {}
 
 function ActionManager.new(maxCases)
@@ -9,9 +11,9 @@ function ActionManager.new(maxCases)
 
     local dispatch = {}
     local patterns = {}
-    local default_action
-    local case_count = 0
-    local max_cases = maxCases or 100
+    local defaultAction
+    local caseCount = 0
+    local caseLimit = maxCases or DEFAULT_MAX_CASES
 
     local function addCase(value, action)
         if value == nil then
@@ -19,20 +21,20 @@ function ActionManager.new(maxCases)
         end
 
         if dispatch[value] == nil then
-            if case_count >= max_cases then
+            if caseCount >= caseLimit then
                 error("Too many cases", 3)
             end
-            case_count = case_count + 1
+            caseCount = caseCount + 1
         end
         dispatch[value] = action
     end
 
     local function addPattern(pattern, action)
-        if case_count >= max_cases then
+        if caseCount >= caseLimit then
             error("Too many cases", 3)
         end
 
-        case_count = case_count + 1
+        caseCount = caseCount + 1
         patterns[#patterns + 1] = {
             pattern = pattern,
             action = action
@@ -77,8 +79,8 @@ function ActionManager.new(maxCases)
                 end
             end
 
-            if default_action then
-                return default_action(value), true, true
+            if defaultAction then
+                return defaultAction(value), true, true
             end
             return nil, false, true
         end,
@@ -87,7 +89,7 @@ function ActionManager.new(maxCases)
             if type(action) ~= "function" then
                 error("Default action must be a function", 2)
             end
-            default_action = action
+            defaultAction = action
         end,
 
         hasAction = function(value)

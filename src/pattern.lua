@@ -13,9 +13,14 @@ local function freeze(t)
 end
 
 local function tagged(kind, data)
-    data = data or {}
-    data[TAG] = kind
-    return data
+    local result = {}
+    if data then
+        for k, v in pairs(data) do
+            result[k] = v
+        end
+    end
+    result[TAG] = kind
+    return result
 end
 
 local function frozenTagged(kind, data)
@@ -53,9 +58,7 @@ function Pattern.isTagged(value)
     return type(value) == "table" and value[TAG] ~= nil
 end
 
-function Pattern.isCaseList(value)
-    return isArrayTable(value)
-end
+Pattern.isCaseList = isArrayTable
 
 local matchesImpl
 
@@ -171,4 +174,4 @@ function Pattern.array(item)
     return frozenTagged("array", { item = item })
 end
 
-return Pattern
+return freeze(Pattern)

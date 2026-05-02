@@ -87,32 +87,32 @@ local function SwitchInit(obj, name, _options)
         end
 
         -- Apply middlewares
-        local final_value = middlewareManager.execute(value)
+        local finalValue = middlewareManager.execute(value)
 
         -- Check the cache after validation and middlewares so they still run.
         if cacheEnabled then
-            local cached = cacheManager.get(final_value)
+            local cached = cacheManager.get(finalValue)
             if cached ~= nil then
-                eventManager.emit("afterExecute", value, cached, final_value)
+                eventManager.emit("afterExecute", value, cached, finalValue)
                 return cached
             end
         end
 
         -- Execute the action
-        local success, result, matched, cacheable = pcall(actionManager.execute, final_value)
+        local success, result, matched, cacheable = pcall(actionManager.execute, finalValue)
         if not success then
             eventManager.emit("error", "action", result)
             result = nil
         elseif not matched then
-            eventManager.emit("noMatch", final_value)
+            eventManager.emit("noMatch", finalValue)
         end
 
         -- Cache and return
         if cacheEnabled and cacheable ~= false and result ~= nil then
-            cacheManager.set(final_value, result)
+            cacheManager.set(finalValue, result)
         end
 
-        eventManager.emit("afterExecute", value, result, final_value)
+        eventManager.emit("afterExecute", value, result, finalValue)
         return result
     end
 
@@ -147,7 +147,7 @@ function Switch:get(name)
 end
 
 function Switch:clear(name)
-    if name then
+    if name ~= nil then
         self.registered[name] = nil
     else
         self.registered = {}
