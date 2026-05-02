@@ -6,7 +6,15 @@ function ActionManager.new(maxCases)
     local case_count = 0
     local max_cases = maxCases or 100
 
+    if type(max_cases) ~= "number" or max_cases < 1 then
+        error("maxCases must be a positive number", 2)
+    end
+
     local function addCase(value, action)
+        if value == nil then
+            error("Case value cannot be nil", 3)
+        end
+
         if dispatch[value] == nil then
             if case_count >= max_cases then
                 error("Too many cases", 3)
