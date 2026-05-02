@@ -8,7 +8,7 @@ local function SwitchInit(obj, name, _options)
         error("Switch with id [" .. name .. "] already registered", 2)
         return
     end
-    
+
     local options = _options or {}
 
     -- Initialize managers

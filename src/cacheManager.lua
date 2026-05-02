@@ -1,7 +1,7 @@
 local CacheManager = {}
 
 function CacheManager.new(eventManager)
-    local cache = setmetatable({}, {__mode = "kv"})
+    local cache = setmetatable({}, { __mode = "kv" })
 
     return {
         get = function(value)
@@ -22,7 +22,7 @@ function CacheManager.new(eventManager)
         end,
 
         clear = function()
-            cache = setmetatable({}, {__mode = "kv"})
+            cache = setmetatable({}, { __mode = "kv" })
         end
     }
 end
