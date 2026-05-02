@@ -190,6 +190,28 @@ local switch = Switch("weak-cache", {
 
 `weakCache` only matters when the dispatched value is a table — Lua does not garbage-collect strings, numbers, or booleans, so weak entries keyed on primitives behave identically to a regular cache.
 
+## Switch Registry
+
+Every named switch is stored in a global registry. You can look up or remove switches by name:
+
+```lua
+local Switch = require("easyswitch")
+
+Switch:get("menu")        -- returns the registered switch, or nil
+local all, count = Switch:get()  -- returns a name -> switch map and its size
+
+Switch:clear("menu")      -- removes one switch from the registry
+Switch:clear()            -- removes all registered switches
+```
+
+You can also clear event callbacks on a switch:
+
+```lua
+mySwitch:clearEvents("error")  -- clears one event
+mySwitch:clearEvents()         -- clears all events
+mySwitch:clearCache()          -- clears cached results
+```
+
 ## Configuration
 
 ```lua
