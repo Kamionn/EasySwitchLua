@@ -35,14 +35,14 @@ end
 
 test("basic literal dispatch", function()
     local s = Switch("t"):when("a", function() return "A" end)
-                        :when("b", function() return "B" end)
+        :when("b", function() return "B" end)
     assertEq(s:execute("a"), "A")
     assertEq(s:execute("b"), "B")
 end)
 
 test("default action runs when no match", function()
     local s = Switch("t"):when("a", function() return "A" end)
-                        :default(function(v) return "?" .. v end)
+        :default(function(v) return "?" .. v end)
     assertEq(s:execute("z"), "?z")
 end)
 
@@ -54,7 +54,7 @@ end)
 
 test("middleware transforms value before dispatch", function()
     local s = Switch("t"):use(function(v) return v:upper() end)
-                        :when("HELLO", function() return "ok" end)
+        :when("HELLO", function() return "ok" end)
     assertEq(s:execute("hello"), "ok")
 end)
 
@@ -86,7 +86,7 @@ end)
 
 test("pattern array matches arrays only", function()
     local s = Switch("t"):when(P.array(P.number), function() return "arr" end)
-                        :default(function() return "no" end)
+        :default(function() return "no" end)
     assertEq(s:execute({ 1, 2, 3 }), "arr")
     assertEq(s:execute({ 1, "x" }), "no")
 end)
@@ -116,7 +116,7 @@ end)
 test("noMatch event fires when nothing matches", function()
     local fired = false
     local s = Switch("t"):on("noMatch", function() fired = true end)
-                        :when("a", function() return "A" end)
+        :when("a", function() return "A" end)
     s:execute("z")
     assertTrue(fired)
 end)
@@ -137,7 +137,7 @@ test("cyclic table pattern does not infinite loop (#11)", function()
     local v = { kind = "x" }
     v.self = v
     local s = Switch("t"):when(p, function() return "ok" end)
-                        :default(function() return "no" end)
+        :default(function() return "no" end)
     assertEq(s:execute(v), "ok")
 end)
 
@@ -168,7 +168,7 @@ end)
 
 test("partial table pattern matches recursively", function()
     local s = Switch("t"):when({ kind = "circle" }, function(v) return v.r end)
-                        :default(function() return nil end)
+        :default(function() return nil end)
     assertEq(s:execute({ kind = "circle", r = 5 }), 5)
     assertEq(s:execute({ kind = "square", s = 4 }), nil)
 end)
