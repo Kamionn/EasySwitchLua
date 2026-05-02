@@ -2,6 +2,7 @@ local EventManager = require("src.eventManager")
 local MiddlewareManager = require("src.middlewareManager")
 local ActionManager = require("src.actionManager")
 local CacheManager = require("src.cacheManager")
+local Pattern = require("src.pattern")
 
 local function SwitchInit(obj, name, _options)
     if not name then
@@ -97,7 +98,7 @@ local function SwitchInit(obj, name, _options)
         end
 
         -- Execute the action
-        local success, result, matched = pcall(actionManager.execute, final_value)
+        local success, result, matched, cacheable = pcall(actionManager.execute, final_value)
         if not success then
             eventManager.emit("error", "action", result)
             result = nil
@@ -106,7 +107,7 @@ local function SwitchInit(obj, name, _options)
         end
 
         -- Cache and return
-        if cacheEnabled and result ~= nil then
+        if cacheEnabled and cacheable ~= false and result ~= nil then
             cacheManager.set(final_value, result)
         end
 
@@ -129,7 +130,7 @@ local function SwitchInit(obj, name, _options)
     return switch
 end
 
-local Switch = setmetatable({ registered = {} }, { __call = SwitchInit })
+local Switch = setmetatable({ registered = {}, P = Pattern }, { __call = SwitchInit })
 
 function Switch:get(name)
     if not next(self.registered) then
