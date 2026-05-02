@@ -56,10 +56,6 @@ function ActionManager.new(maxCases)
             if type(cases) ~= "table" then
                 addCase(cases, action)
             elseif Pattern.isCaseList(cases) then
-                if #cases == 0 then
-                    error("Cases list cannot be empty", 2)
-                end
-
                 for i = 1, #cases do
                     addCaseOrPattern(cases[i], action)
                 end
