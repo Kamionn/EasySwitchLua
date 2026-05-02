@@ -35,7 +35,17 @@ function EventManager.new()
                 local callback = array[i]
                 local success, err = pcall(callback, ...)
                 if not success then
-                    print("Event error:", err)
+                    if event == "error" then
+                        print("Event error:", err)
+                    else
+                        local errorCallbacks = events.error
+                        for j = 1, #errorCallbacks do
+                            local handled = pcall(errorCallbacks[j], "event", err)
+                            if not handled then
+                                print("Event error:", err)
+                            end
+                        end
+                    end
                 end
             end
         end,
