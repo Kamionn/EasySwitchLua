@@ -64,7 +64,7 @@ local function SwitchInit(obj, name, _options)
         if checkFunction ~= nil and type(checkFunction) ~= "function" then
             error("Before check must be a function", 2)
         end
-        beforeCheck = checkFunction or beforeCheck
+        beforeCheck = checkFunction or defaultBeforeCheck
         cacheManager.clear()
         return self
     end
