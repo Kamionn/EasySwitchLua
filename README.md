@@ -154,17 +154,19 @@ local debugSwitch = Switch("debug")
 debugSwitch:execute("test")
 ```
 
-Available events:
+Available events and their callback signatures:
 
-- `beforeExecute`: before validation, middleware, cache, and dispatch
-- `afterExecute`: after execution, cache hit, failed before check, or handled error
-- `error`: when a before check, middleware, action, or event callback fails
-- `cacheHit`: cached result found
-- `cacheMiss`: cached result not found
-- `middlewareStart`: middleware chain starts
-- `middlewareEnd`: middleware chain ends
-- `beforeCheckFailed`: `before()` returned false or nil
-- `noMatch`: no action and no default handler matched the final value
+| Event | Callback signature | Fires when |
+|---|---|---|
+| `beforeExecute` | `function(value)` | Before validation, middleware, cache, and dispatch |
+| `afterExecute` | `function(value, result, finalValue)` | After every `execute()`, including early returns. `result` and `finalValue` may be `nil` |
+| `error` | `function(kind, err)` | A `before` check, middleware, action, or event callback fails. `kind` is `"before"`, `"middleware"`, `"action"`, or `"event"` |
+| `cacheHit` | `function(value, cached)` | Cached result found |
+| `cacheMiss` | `function(value)` | No cached result |
+| `middlewareStart` | `function(value)` | Middleware chain starts |
+| `middlewareEnd` | `function(finalValue)` | Middleware chain ends |
+| `beforeCheckFailed` | `function(value)` | `before()` returned false or nil |
+| `noMatch` | `function(finalValue)` | No action and no default handler matched |
 
 ## Caching
 
