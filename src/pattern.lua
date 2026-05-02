@@ -2,10 +2,21 @@ local Pattern = {}
 
 local TAG = "__easyswitch_pattern"
 
+local function freeze(t)
+    return setmetatable(t, {
+        __newindex = function() error("Pattern is readonly", 2) end,
+        __metatable = false
+    })
+end
+
 local function tagged(kind, data)
     data = data or {}
     data[TAG] = kind
     return data
+end
+
+local function frozenTagged(kind, data)
+    return freeze(tagged(kind, data))
 end
 
 local function isInteger(value)
@@ -18,14 +29,17 @@ local function isArrayTable(value)
     end
 
     local count = 0
-    for key in pairs(value) do
-        if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then
-            return false
-        end
+    for _ in pairs(value) do
         count = count + 1
     end
 
-    return count == #value
+    for i = 1, count do
+        if value[i] == nil then
+            return false
+        end
+    end
+
+    return true
 end
 
 function Pattern.isTagged(value)
@@ -33,10 +47,12 @@ function Pattern.isTagged(value)
 end
 
 function Pattern.isCaseList(value)
-    return isArrayTable(value) and not Pattern.isTagged(value)
+    return isArrayTable(value)
 end
 
-local function matchTagged(pattern, value)
+local matchesImpl
+
+local function matchTagged(pattern, value, visited)
     local kind = pattern[TAG]
 
     if kind == "type" then
@@ -56,7 +72,7 @@ local function matchTagged(pattern, value)
 
     if kind == "any_of" then
         for i = 1, #pattern.patterns do
-            if Pattern.matches(pattern.patterns[i], value) then
+            if matchesImpl(pattern.patterns[i], value, visited) then
                 return true
             end
         end
@@ -64,7 +80,7 @@ local function matchTagged(pattern, value)
     end
 
     if kind == "not" then
-        return not Pattern.matches(pattern.pattern, value)
+        return not matchesImpl(pattern.pattern, value, visited)
     end
 
     if kind == "array" then
@@ -73,7 +89,7 @@ local function matchTagged(pattern, value)
         end
 
         for i = 1, #value do
-            if not Pattern.matches(pattern.item, value[i]) then
+            if not matchesImpl(pattern.item, value[i], visited) then
                 return false
             end
         end
@@ -83,9 +99,9 @@ local function matchTagged(pattern, value)
     error("Unknown pattern kind: " .. tostring(kind), 2)
 end
 
-function Pattern.matches(pattern, value)
+matchesImpl = function(pattern, value, visited)
     if Pattern.isTagged(pattern) then
-        return matchTagged(pattern, value)
+        return matchTagged(pattern, value, visited)
     end
 
     if type(pattern) == "table" then
@@ -93,8 +109,13 @@ function Pattern.matches(pattern, value)
             return false
         end
 
+        if visited[pattern] then
+            return true
+        end
+        visited[pattern] = true
+
         for key, expected in pairs(pattern) do
-            if not Pattern.matches(expected, value[key]) then
+            if not matchesImpl(expected, value[key], visited) then
                 return false
             end
         end
@@ -104,17 +125,21 @@ function Pattern.matches(pattern, value)
     return pattern == value
 end
 
-Pattern.string = tagged("type", { name = "string" })
-Pattern.number = tagged("type", { name = "number" })
-Pattern.boolean = tagged("type", { name = "boolean" })
-Pattern.integer = tagged("type", { name = "integer" })
-Pattern.float = tagged("type", { name = "float" })
+function Pattern.matches(pattern, value)
+    return matchesImpl(pattern, value, {})
+end
+
+Pattern.string = frozenTagged("type", { name = "string" })
+Pattern.number = frozenTagged("type", { name = "number" })
+Pattern.boolean = frozenTagged("type", { name = "boolean" })
+Pattern.integer = frozenTagged("type", { name = "integer" })
+Pattern.float = frozenTagged("type", { name = "float" })
 
 function Pattern.when(fn)
     if type(fn) ~= "function" then
         error("Pattern predicate must be a function", 2)
     end
-    return tagged("predicate", { fn = fn })
+    return frozenTagged("predicate", { fn = fn })
 end
 
 function Pattern.any_of(...)
@@ -122,15 +147,21 @@ function Pattern.any_of(...)
     if #patterns == 0 then
         error("P.any_of requires at least one pattern", 2)
     end
-    return tagged("any_of", { patterns = patterns })
+    return frozenTagged("any_of", { patterns = patterns })
 end
 
 function Pattern.not_(pattern)
-    return tagged("not", { pattern = pattern })
+    if pattern == nil then
+        error("P.not_ requires a pattern", 2)
+    end
+    return frozenTagged("not", { pattern = pattern })
 end
 
 function Pattern.array(item)
-    return tagged("array", { item = item })
+    if item == nil then
+        error("P.array requires an item pattern", 2)
+    end
+    return frozenTagged("array", { item = item })
 end
 
 return Pattern
