@@ -2,46 +2,43 @@ local EventManager = {}
 
 function EventManager.new()
     local events = {
-        beforeExecute = {},
-        afterExecute = {},
-        error = {},
-        cacheHit = {},
-        cacheMiss = {},
-        middlewareStart = {},
-        middlewareEnd = {},
-        noMatch = {}
+        beforeExecute     = {},
+        afterExecute      = {},
+        error             = {},
+        cacheHit          = {},
+        cacheMiss         = {},
+        middlewareStart   = {},
+        middlewareEnd     = {},
+        noMatch           = {},
+        beforeCheckFailed = {},
     }
 
     return {
         on = function(event, callback)
-            if events[event] then
-                local length = #events[event]
-                events[event][length + 1] = callback
+            if not events[event] then
+                error("Unknown event: '" .. tostring(event) .. "'", 2)
             end
+            events[event][#events[event] + 1] = callback
         end,
 
         emit = function(event, ...)
-            local array = events[event] or {}
-            local length = #array
-
-            for i = 1, length do
-                local callback = array[i]
-                local success, err = pcall(callback, ...)
-                if not success then
-                    print("Event error:", err)
+            local array = events[event]
+            if not array then return end
+            for i = 1, #array do
+                local ok, err = pcall(array[i], ...)
+                if not ok then
+                    print("[EasySwitch] Event error in '" .. event .. "':", err)
                 end
             end
         end,
 
         clear = function(event)
             if event then
-                events[event] = {}
+                if events[event] then events[event] = {} end
             else
-                for k in pairs(events) do
-                    events[k] = {}
-                end
+                for k in pairs(events) do events[k] = {} end
             end
-        end
+        end,
     }
 end
 

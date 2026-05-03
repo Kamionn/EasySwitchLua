@@ -5,8 +5,8 @@ function CacheManager.new(eventManager)
 
     return {
         get = function(value)
-            if cache[value] then
-                local v = cache[value]
+            local v = cache[value]
+            if v ~= nil then
                 eventManager.emit("cacheHit", value, v)
                 return v
             end
@@ -18,6 +18,15 @@ function CacheManager.new(eventManager)
         set = function(value, result)
             if result ~= nil then
                 cache[value] = result
+            end
+        end,
+
+        update = function(value, fn)
+            if cache[value] ~= nil then
+                local newResult = fn(cache[value])
+                if newResult ~= nil then
+                    cache[value] = newResult
+                end
             end
         end,
 
