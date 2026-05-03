@@ -2,46 +2,15 @@ local MiddlewareManager = {}
 
 function MiddlewareManager.new(eventManager)
     local middlewares = {}
-    local compiled_middleware
-    local middleware_hash = ""
+    local compiled
 
-    local function hashMiddlewares()
-        local hash, length = {}, #middlewares
-
-        if length == 0 then
-            return ""
-        end
-
-        for i = 1, length do
-            local middleware = middlewares[i]
-            hash[i] = tostring(middleware)
-        end
-
-        return table.concat(hash)
-    end
-
-    local function compileMiddlewares()
-        local new_hash = hashMiddlewares()
-        if new_hash == middleware_hash and compiled_middleware then
-            return compiled_middleware
-        end
-
-        middleware_hash = new_hash
-
+    local function compile()
         return function(value)
             local current = value
-            local length = #middlewares
-
-            if length == 0 then
-                return value
-            end
-
-            for i = 1, length do
-                local middleware = middlewares[i]
-                local success, result = pcall(middleware, current)
+            for i = 1, #middlewares do
+                local success, result = pcall(middlewares[i], current)
                 if not success then
                     eventManager.emit("error", "middleware", result)
-                    current = value
                 elseif result ~= nil then
                     current = result
                 end
@@ -57,7 +26,7 @@ function MiddlewareManager.new(eventManager)
             end
 
             middlewares[#middlewares + 1] = middleware
-            compiled_middleware = nil -- Force recompilation
+            compiled = nil
         end,
 
         execute = function(value)
@@ -66,11 +35,11 @@ function MiddlewareManager.new(eventManager)
             end
 
             eventManager.emit("middlewareStart", value)
-            if not compiled_middleware then
-                compiled_middleware = compileMiddlewares()
+            if not compiled then
+                compiled = compile()
             end
 
-            local result = compiled_middleware(value)
+            local result = compiled(value)
             eventManager.emit("middlewareEnd", result)
             return result
         end,
