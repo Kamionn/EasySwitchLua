@@ -2,7 +2,7 @@
 
 A performant switch/pattern-matching library for Lua with middleware, events, caching, and structural dispatch.
 
-Works on standard Lua 5.1+, LuaJIT, and FiveM.
+Works on standard Lua 5.1+, LuaJIT, FiveM, Roblox (Luau), and LÖVE2D.
 
 ---
 
@@ -34,6 +34,46 @@ shared_scripts {
 ```
 
 `EasySwitch` is then available in all your scripts without any `require`.
+
+### Roblox
+
+1. Run `lua build.lua` to generate `dist/easyswitch.lua`.
+2. In Roblox Studio, create a `ModuleScript` in `ReplicatedStorage` named `EasySwitch`.
+3. Paste the full content of `dist/easyswitch.lua` into it.
+4. Use it from any script:
+
+```lua
+local EasySwitch = require(game.ReplicatedStorage.EasySwitch)
+
+local sw = EasySwitch.new()
+    :when("attack", function() print("attacking!") end)
+    :when("defend", function() print("defending!") end)
+    :default(function(v) print("unknown action:", v) end)
+
+sw:execute("attack")
+```
+
+The bundled file has no external `require()` calls and is fully compatible with Luau's sandbox.
+
+### LÖVE2D
+
+Copy the `src/` folder and `easyswitch.lua` into your LÖVE project (or use the single bundled `dist/easyswitch.lua`):
+
+```lua
+-- main.lua
+local EasySwitch = require("easyswitch")
+
+local gameState = EasySwitch.new()
+    :when("menu",  function() -- draw menu  end)
+    :when("game",  function() -- draw game  end)
+    :when("pause", function() -- draw pause end)
+
+function love.keypressed(key)
+    if key == "escape" then gameState:execute("pause") end
+end
+```
+
+LÖVE runs on LuaJIT (Lua 5.1) — no configuration needed, everything works out of the box.
 
 ---
 
@@ -341,6 +381,34 @@ local sw = EasySwitch("name", { maxCases = 500 })
 | Option | Default | Description |
 |---|---|---|
 | `maxCases` | `100` | Maximum number of registered cases |
+
+---
+
+## Full example — LÖVE2D game state machine
+
+```lua
+local EasySwitch = require("easyswitch")
+local P = EasySwitch.P
+
+local state = EasySwitch.new()
+    :on("noMatch", function(v) print("[warn] unknown state:", v) end)
+    :when("menu",  function() love.graphics.print("MENU",  10, 10) end)
+    :when("game",  function() love.graphics.print("GAME",  10, 10) end)
+    :when("over",  function() love.graphics.print("GAME OVER", 10, 10) end)
+    :default(function() love.graphics.print("???", 10, 10) end)
+
+local current = "menu"
+
+function love.draw()
+    state:execute(current)
+end
+
+function love.keypressed(key)
+    if key == "return" and current == "menu" then current = "game"
+    elseif key == "escape"                   then current = "over"
+    end
+end
+```
 
 ---
 
