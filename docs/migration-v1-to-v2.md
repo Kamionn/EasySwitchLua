@@ -198,4 +198,4 @@ Your tests should now pass on v2 with no behavioural drift other than the new op
 
 ## Need help porting ?
 
-Open an issue at https://github.com/SUP2Ak/EasySwitchLua/issues with a snippet of your v1 code and the error you're hitting — happy to help.
+Open an issue at https://github.com/Kamionn/EasySwitchLua/issues with a snippet of your v1 code and the error you're hitting — happy to help.

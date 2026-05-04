@@ -1,6 +1,6 @@
 # EasySwitchLua
 
-[![CI](https://github.com/SUP2Ak/EasySwitchLua/actions/workflows/ci.yml/badge.svg)](https://github.com/SUP2Ak/EasySwitchLua/actions/workflows/ci.yml) [![version](https://img.shields.io/github/v/tag/SUP2Ak/EasySwitchLua?label=version&color=orange&sort=semver)](https://github.com/SUP2Ak/EasySwitchLua/tags) [![focus](https://img.shields.io/badge/focus-Switch%20%2F%20Dispatcher-purple)](https://img.shields.io/badge/focus-Switch%20%2F%20Dispatcher-purple) [![lang](https://img.shields.io/badge/lang-Lua%205.1%2B%20%2F%20LuaJIT%20%2F%20Luau-green)](https://img.shields.io/badge/lang-Lua%205.1%2B%20%2F%20LuaJIT%20%2F%20Luau-green) [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+[![CI](https://github.com/Kamionn/EasySwitchLua/actions/workflows/ci.yml/badge.svg)](https://github.com/Kamionn/EasySwitchLua/actions/workflows/ci.yml) [![version](https://img.shields.io/github/v/tag/Kamionn/EasySwitchLua?label=version&color=orange&sort=semver)](https://github.com/Kamionn/EasySwitchLua/tags) [![focus](https://img.shields.io/badge/focus-Switch%20%2F%20Dispatcher-purple)](https://img.shields.io/badge/focus-Switch%20%2F%20Dispatcher-purple) [![lang](https://img.shields.io/badge/lang-Lua%205.1%2B%20%2F%20LuaJIT%20%2F%20Luau-green)](https://img.shields.io/badge/lang-Lua%205.1%2B%20%2F%20LuaJIT%20%2F%20Luau-green) [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
 A builder-style switch / pattern-matching library for Lua with middleware, events, opt-in memoize, and structural dispatch. Built on top of [matchigo-lua](https://github.com/SUP2Ak/matchigo-lua) (vendored in the bundle) for pattern-test logic and the optional Rust-style DSL.
 
@@ -15,7 +15,7 @@ Works on standard Lua 5.1+, LuaJIT, FiveM, Roblox (Luau), and LÖVE2D.
 > [!WARNING]
 > **Download the named release asset, not "Source code (zip)"** — the source archive does not include the bundled dist (`dist/` is gitignored).
 
-Grab `EasySwitchLua-vX.Y.Z.zip` from the [Releases page](https://github.com/SUP2Ak/EasySwitchLua/releases), extract `easyswitch.lua`, then :
+Grab `EasySwitchLua-vX.Y.Z.zip` from the [Releases page](https://github.com/Kamionn/EasySwitchLua/releases), extract `easyswitch.lua`, then :
 
 ```lua
 local EasySwitch = require("easyswitch")
