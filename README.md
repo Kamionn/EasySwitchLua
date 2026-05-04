@@ -1,8 +1,12 @@
 # EasySwitchLua
 
-A performant switch/pattern-matching library for Lua with middleware, events, caching, and structural dispatch.
+[![CI](https://github.com/SUP2Ak/EasySwitchLua/actions/workflows/ci.yml/badge.svg)](https://github.com/SUP2Ak/EasySwitchLua/actions/workflows/ci.yml) [![focus](https://img.shields.io/badge/focus-Switch%20%2F%20Dispatcher-purple)](https://img.shields.io/badge/focus-Switch%20%2F%20Dispatcher-purple) [![lang](https://img.shields.io/badge/lang-Lua%205.1%2B%20%2F%20LuaJIT-green)](https://img.shields.io/badge/lang-Lua%205.1%2B%20%2F%20LuaJIT-green) [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+
+A builder-style switch / pattern-matching library for Lua with middleware, events, opt-in memoize, and structural dispatch. Built on top of [matchigo-lua](https://github.com/SUP2Ak/matchigo-lua) (vendored in the bundle) for pattern-test logic and the optional Rust-style DSL.
 
 Works on standard Lua 5.1+, LuaJIT, FiveM, Roblox (Luau), and LÖVE2D.
+
+📖 **[Full documentation in `docs/`](docs/README.md)** — installation, API reference, guides, examples, v1→v2 migration.
 
 ---
 
@@ -128,9 +132,9 @@ local P = EasySwitch.P
 | `P.boolean` | `true` or `false` |
 | `P.integer` | whole numbers |
 | `P.float` | decimal numbers |
-| `P.table` | any table |
 | `P.func` | any function |
-| `P.nil_` | `nil` |
+| `P.nullish` | `nil` |
+| `P.defined` | any non-nil value |
 | `P.any` | everything |
 
 ```lua
@@ -145,11 +149,13 @@ sw:when(P.float,   function(v) return "got float: " .. v  end)
 sw:when(P.when(function(v) return v > 0 end), function() return "positive" end)
 ```
 
-### P.any_of — union
+### P.union / P.anyOf — disjunction
+
+`P.union(...)` is the literal-only union (hash O(1) lookup). `P.anyOf(...)` accepts any pattern, walks linearly :
 
 ```lua
-sw:when(P.any_of("red", "green", "blue"), function(v) return "color: " .. v end)
-sw:when(P.any_of(P.integer, P.string),    function() return "int or string"  end)
+sw:when(P.union("red", "green", "blue"), function(v) return "color: " .. v end)
+sw:when(P.anyOf(P.integer, P.string),    function() return "int or string"  end)
 ```
 
 ### P.not_ — negation
@@ -158,16 +164,15 @@ sw:when(P.any_of(P.integer, P.string),    function() return "int or string"  end
 sw:when(P.not_(P.string), function() return "not a string" end)
 ```
 
-### P.and_ / P.all_of — intersection
+### P.intersection — all-must-match
 
-All patterns must match:
+All patterns must match :
 
 ```lua
-sw:when(P.and_(P.number, P.when(function(v) return v > 0 end)),
+sw:when(P.intersection(P.number, P.when(function(v) return v > 0 end)),
         function() return "positive number" end)
 
--- P.all_of is an alias
-sw:when(P.all_of(P.integer, P.between(1, 100)),
+sw:when(P.intersection(P.integer, P.between(1, 100)),
         function() return "integer between 1 and 100" end)
 ```
 
@@ -179,21 +184,26 @@ sw:when(P.between(11, 20), function() return "medium" end)
 sw:when(P.between(21, 99), function() return "high"   end)
 ```
 
-### P.array — homogeneous array
+### P.array / P.arrayOf — homogeneous array
 
-Matches a non-empty sequential table where every element matches the given pattern:
+`P.array(item)` matches a sequential table where every element matches `item`. The empty table `{}` matches **vacuously** (no counterexample) — same semantics as `arr.every(...)` in JS, `iter.all(...)` in Rust.
 
 ```lua
 sw:when(P.array(P.number), function() return "array of numbers" end)
-sw:when(P.array(P.string), function() return "array of strings" end)
 ```
 
-### P.string_match — Lua pattern on strings
+If you want to reject empty arrays, use `P.arrayOf(item, { min = 1 })` :
 
 ```lua
-sw:when(P.string_match("^/api/"), function() return "api route"  end)
-sw:when(P.string_match("^/web/"), function() return "web route"  end)
-sw:when(P.string_match("%d+"),    function() return "has digits"  end)
+sw:when(P.arrayOf(P.string, { min = 1, max = 100 }), function() return "1..100 strings" end)
+```
+
+### P.luaPattern — Lua string pattern match
+
+```lua
+sw:when(P.luaPattern("^/api/"), function() return "api route"  end)
+sw:when(P.luaPattern("^/web/"), function() return "web route"  end)
+sw:when(P.luaPattern("%d+"),    function() return "has digits"  end)
 ```
 
 ### Partial table matching
@@ -224,6 +234,18 @@ sw:when({ active = true }, function() return "partial" end)
 -- strict: { active=true, score=100 } does NOT match
 sw:when(P.shape({ active = true }), function() return "strict" end)
 ```
+
+### DSL strings in `:when()`
+
+A string starting with `{`, `[`, `(`, `'` or `"` is parsed as a [matchigo DSL pattern](https://github.com/SUP2Ak/matchigo-lua) — anything else stays a literal. Pass a scope table as the 2nd arg to force DSL parsing and resolve PascalCase refs :
+
+```lua
+sw:when("'GET' | 'POST' | 'PUT'", function(m) return "method:" .. m end)
+sw:when("{| kind: 'click', x: Num, y: Num |}", { Num = P.number },
+        function(c) return ("at %d,%d"):format(c.x, c.y) end)
+```
+
+Full DSL grammar lives in matchigo's docs ; a dedicated `docs/` folder will land here later.
 
 ---
 
@@ -302,11 +324,9 @@ sw:execute(42)     -- nil (before check failed)
 ## Events
 
 ```lua
-sw:on("beforeExecute",     function(value)          end)
+sw:on("beforeExecute",     function(value)           end)
 sw:on("afterExecute",      function(value, result)   end)
 sw:on("error",             function(origin, message) end)
-sw:on("cacheHit",          function(value, result)   end)
-sw:on("cacheMiss",         function(value)           end)
 sw:on("middlewareStart",   function(value)           end)
 sw:on("middlewareEnd",     function(result)          end)
 sw:on("noMatch",           function(value)           end)
@@ -325,26 +345,32 @@ local sw = EasySwitch.new()
 
 ---
 
-## Caching
+## Memoize (opt-in)
 
-Literal dispatch results are cached automatically (weak-key table, GC-friendly). Pattern results are never cached.
+No implicit cache. Call `:memoize()` to opt in — results are then cached by input value (weak refs, GC-friendly). Pattern hits and literal hits are both cached. `nil` results aren't cached so adding a new rule afterwards isn't shadowed by a stale miss.
 
 ```lua
-sw:when("calc", function()
-    -- runs once, result cached on subsequent calls
-    local r = 0
-    for i = 1, 1e6 do r = r + i end
-    return r
-end)
+local sw = EasySwitch.new():memoize()
+    :when("calc", function()
+        local r = 0
+        for i = 1, 1e6 do r = r + i end
+        return r
+    end)
 
 sw:execute("calc")  -- computed
-sw:execute("calc")  -- from cache
+sw:execute("calc")  -- cache HIT, action not re-run
 ```
 
-Clear the cache manually:
+Mutating the switch (`:when`, `:default`, `:use`, `:before`) auto-invalidates the cache so a new rule never runs against stale entries. Clear manually with :
 
 ```lua
 sw:clearCache()
+```
+
+For dev / debugging, pass `{ verify = true }` — every cache HIT re-runs the pipeline and errors on divergence (catches non-deterministic actions). Slow, do not ship to prod with verify on.
+
+```lua
+local sw = EasySwitch.new():memoize({ verify = true })
 ```
 
 ---
@@ -373,14 +399,14 @@ EasySwitch.clear()
 ## Configuration
 
 ```lua
-local sw = EasySwitch.new({ maxCases = 500 })
+local sw = EasySwitch.new({ safe = true })
 -- or
-local sw = EasySwitch("name", { maxCases = 500 })
+local sw = EasySwitch("name", { safe = true })
 ```
 
 | Option | Default | Description |
 |---|---|---|
-| `maxCases` | `100` | Maximum number of registered cases |
+| `safe` | `false` | Wrap action execution in a `pcall`. On error, the `error` event fires (when listened) and `:execute()` returns `nil` instead of propagating. Off by default — errors propagate like in matchigo. |
 
 ---
 
@@ -418,10 +444,10 @@ end
 local P = EasySwitch.P
 
 local jobSwitch = EasySwitch.new()
-    :when(P.string_match("^police"),  function(job) return "PD — " .. job   end)
-    :when(P.string_match("^mechanic"),function(job) return "Garage — " .. job end)
-    :when(P.any_of("ambulance", "doctor"), function() return "EMS"          end)
-    :when(P.and_(P.string, P.when(function(v) return #v > 0 end)),
+    :when(P.luaPattern("^police"),    function(job) return "PD — " .. job     end)
+    :when(P.luaPattern("^mechanic"),  function(job) return "Garage — " .. job end)
+    :when(P.union("ambulance", "doctor"), function() return "EMS"             end)
+    :when(P.intersection(P.string, P.when(function(v) return #v > 0 end)),
           function(job) return "Civilian — " .. job end)
     :default(function() return "No job" end)
 

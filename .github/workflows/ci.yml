@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+# Cancel superseded runs when a new commit lands on the same branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lua ${{ matrix.lua }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        lua:
+          - "5.1"
+          - "5.2"
+          - "5.3"
+          - "5.4"
+          # LuaJIT 2.1 in the leafo/gh-actions-lua catalog is published as
+          # `luajit-openresty` (the LuaJIT 2.1 build maintained by OpenResty).
+          # Plain "luajit-2.1" 404s — that key doesn't exist in the action.
+          - "luajit-openresty"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Lua ${{ matrix.lua }}
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: ${{ matrix.lua }}
+
+      # leafo/gh-actions-lua installs LuaJIT variants under the binary name
+      # `luajit` only — no `lua` symlink. Make `lua` available so the rest of
+      # the workflow doesn't need a per-cell command split.
+      - name: Symlink luajit → lua (LuaJIT cells only)
+        if: contains(matrix.lua, 'luajit')
+        run: |
+          set -euo pipefail
+          luajit_path="$(command -v luajit)"
+          echo "Linking ${luajit_path} -> /usr/local/bin/lua"
+          sudo ln -sf "${luajit_path}" /usr/local/bin/lua
+          lua -v
+
+      - name: Run tests against the source tree
+        run: lua tests/test_all.lua
+
+      - name: Build the bundled distribution
+        run: lua build.lua
+
+      - name: Run tests against the bundle
+        run: lua tests/test_all.lua dist

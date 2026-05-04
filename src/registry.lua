@@ -1,45 +1,47 @@
--- Optional named registry — wraps Switch.new() and stores instances by name.
--- Kept separate so anonymous usage (EasySwitch.new) has zero registry overhead.
--- store is always mutated in-place so Registry.registered stays valid.
+-- Named registry for EasySwitch v2. Backed by matchigo's Map so insertion
+-- order is preserved (useful when dumping `EasySwitch.get()` for inspection)
+-- and `:size` is O(1) — v1 walked `pairs(store)` to count.
 
-local Switch = require("src.switch")
+local Switch   = require("src.switch")
+local matchigo = require("vendor.matchigo")
 
-local Registry = {}
+local Map = matchigo.Map
 
-local store = {}
-Registry.registered = store
+local M = {}
 
-function Registry.create(name, options)
+local store = Map.new()
+M.store = store
+
+function M.create(name, options)
     if type(name) ~= "string" or name == "" then
         error("Registry name must be a non-empty string. Use EasySwitch.new() for anonymous switches.", 2)
     end
-    if store[name] then
+    if store:has(name) then
         error("Switch [" .. name .. "] is already registered", 2)
     end
     local instance = Switch.new(options)
-    store[name] = instance
+    store:set(name, instance)
     return instance
 end
 
-function Registry.get(name)
+function M.get(name)
     if name then
-        return store[name]
+        return store:get(name)
     end
-    if not next(store) then return nil, 0 end
-    local result, count = {}, 0
-    for k, v in pairs(store) do
-        count = count + 1
+    if store.size == 0 then return nil, 0 end
+    local result = {}
+    for k, v in store:pairs() do
         result[k] = v
     end
-    return result, count
+    return result, store.size
 end
 
-function Registry.clear(name)
+function M.clear(name)
     if name then
-        store[name] = nil
+        store:delete(name)
     else
-        for k in pairs(store) do store[k] = nil end
+        store:clear()
     end
 end
 
-return Registry
+return M
