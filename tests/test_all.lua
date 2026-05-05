@@ -1,7 +1,15 @@
--- Run from project root: lua tests/test_all.lua
-package.path = "./?.lua;./src/?.lua;" .. package.path
+-- Run from project root :
+--   lua tests/test_all.lua          -- against ./src (source)
+--   lua tests/test_all.lua dist     -- against ./dist/easyswitch.lua (bundled)
 
-local EasySwitch = require("easyswitch")
+local mode = arg and arg[1]
+local EasySwitch
+if mode == "dist" then
+    EasySwitch = dofile("dist/easyswitch.lua")
+else
+    package.path = "./?.lua;./?/init.lua;./src/?.lua;" .. package.path
+    EasySwitch = require("easyswitch")
+end
 local P = EasySwitch.P
 
 -- ── Runner ────────────────────────────────────────────────────────────────────
@@ -96,7 +104,7 @@ test("literal takes priority over pattern", function()
 end)
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- 2. Pattern matching — type sentinels
+-- 2. Pattern matching — type sentinels (matchigo P)
 -- ══════════════════════════════════════════════════════════════════════════════
 
 section("Pattern: type sentinels")
@@ -131,12 +139,20 @@ test("P.any matches everything", function()
     eq(sw:execute(true), "any")
 end)
 
-test("P.integer matches whole numbers", function()
+test("P.integer / P.float separate whole vs fractional", function()
     local sw = new_sw()
     sw:when(P.integer, function() return "int" end)
     sw:when(P.float,   function() return "float" end)
     eq(sw:execute(1),   "int")
     eq(sw:execute(1.5), "float")
+end)
+
+test("P.nullish matches nil only", function()
+    local sw = new_sw()
+    sw:when(P.nullish, function() return "nil" end)
+    eq(sw:execute(nil), "nil")
+    is_nil(sw:execute(false))
+    is_nil(sw:execute(0))
 end)
 
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -154,17 +170,17 @@ test("P.when(fn) — predicate", function()
     is_nil(sw:execute("5"))
 end)
 
-test("P.any_of — literal union", function()
+test("P.union — literal union (hash O(1))", function()
     local sw = new_sw()
-    sw:when(P.any_of("red", "green", "blue"), function(v) return "color:" .. v end)
+    sw:when(P.union("red", "green", "blue"), function(v) return "color:" .. v end)
     eq(sw:execute("red"),   "color:red")
     eq(sw:execute("blue"),  "color:blue")
     is_nil(sw:execute("yellow"))
 end)
 
-test("P.any_of — mixed pattern union", function()
+test("P.anyOf — mixed pattern union", function()
     local sw = new_sw()
-    sw:when(P.any_of(P.integer, P.string), function() return "int-or-str" end)
+    sw:when(P.anyOf(P.integer, P.string), function() return "int-or-str" end)
     eq(sw:execute(1),     "int-or-str")
     eq(sw:execute("hi"),  "int-or-str")
     is_nil(sw:execute(1.5))
@@ -177,12 +193,19 @@ test("P.not_ — negation", function()
     is_nil(sw:execute("x"))
 end)
 
-test("P.array(item) — homogeneous array", function()
+test("P.array(item) — homogeneous array (matches empty vacuously)", function()
     local sw = new_sw()
     sw:when(P.array(P.number), function() return "nums" end)
     eq(sw:execute({1, 2, 3}), "nums")
     is_nil(sw:execute({1, "x", 3}))
-    is_nil(sw:execute({}))  -- empty arrays don't match
+    eq(sw:execute({}), "nums") -- v2 : matchigo semantics, empty matches vacuously
+end)
+
+test("P.arrayOf(item, {min = 1}) — non-empty escape hatch", function()
+    local sw = new_sw()
+    sw:when(P.arrayOf(P.number, { min = 1 }), function() return "nums" end)
+    eq(sw:execute({1, 2, 3}), "nums")
+    is_nil(sw:execute({})) -- min = 1 forbids empty
 end)
 
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -293,25 +316,6 @@ test("afterExecute fires with result", function()
     eq(got, "y")
 end)
 
-test("cacheHit fires on second call", function()
-    local hits = 0
-    local sw = new_sw()
-    sw:on("cacheHit", function() hits = hits + 1 end)
-    sw:when("x", function() return "y" end)
-    sw:execute("x")
-    sw:execute("x")
-    eq(hits, 1)
-end)
-
-test("cacheMiss fires on first call", function()
-    local misses = 0
-    local sw = new_sw()
-    sw:on("cacheMiss", function() misses = misses + 1 end)
-    sw:when("x", function() return "y" end)
-    sw:execute("x")
-    eq(misses, 1)
-end)
-
 test("noMatch fires when nothing handles value", function()
     local fired = false
     local sw = new_sw()
@@ -331,13 +335,20 @@ test("beforeCheckFailed fires when :before returns false", function()
     is_true(fired)
 end)
 
-test("error event fires on action error", function()
+test("error event fires on action error (safe = true)", function()
     local got_err = false
-    local sw = new_sw()
+    local sw = new_sw({ safe = true })
     sw:on("error", function() got_err = true end)
     sw:when("x", function() error("action failed") end)
     sw:execute("x")
     is_true(got_err)
+end)
+
+test("action error propagates by default (no safe option)", function()
+    local sw = new_sw()
+    sw:when("x", function() error("action failed") end)
+    local ok = pcall(function() sw:execute("x") end)
+    is_true(not ok, "should propagate")
 end)
 
 test("on() errors on unknown event", function()
@@ -346,57 +357,19 @@ test("on() errors on unknown event", function()
         sw:on("nonexistent", function() end)
     end)
     is_true(not ok, "should have errored")
-    is_true(err:find("Unknown event") ~= nil, "error message")
+    is_true(type(err) == "string" and err:find("Unknown event") ~= nil, "error message")
+end)
+
+test("cacheHit / cacheMiss are unknown events in v2", function()
+    local sw = new_sw()
+    local ok = pcall(function() sw:on("cacheHit", function() end) end)
+    is_true(not ok, "cacheHit should not exist")
+    local ok2 = pcall(function() sw:on("cacheMiss", function() end) end)
+    is_true(not ok2, "cacheMiss should not exist")
 end)
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- 8. Cache
--- ══════════════════════════════════════════════════════════════════════════════
-
-section("Cache")
-
-test("result cached after first call", function()
-    local calls = 0
-    local sw = new_sw()
-    sw:when("x", function() calls = calls + 1; return "y" end)
-    sw:execute("x")
-    sw:execute("x")
-    eq(calls, 1, "action call count")
-end)
-
-test("clearCache forces re-execution", function()
-    local calls = 0
-    local sw = new_sw()
-    sw:when("x", function() calls = calls + 1; return "y" end)
-    sw:execute("x")
-    sw:clearCache()
-    sw:execute("x")
-    eq(calls, 2, "action call count after clear")
-end)
-
-test("false result is cached and returned correctly", function()
-    local calls = 0
-    local sw = new_sw()
-    sw:when("x", function() calls = calls + 1; return false end)
-    local r1 = sw:execute("x")
-    local r2 = sw:execute("x")
-    eq(calls, 1, "action should only run once")
-    eq(r1, false)
-    eq(r2, false)
-end)
-
-test("pattern results are NOT cached", function()
-    local calls = 0
-    local sw = new_sw()
-    sw:when(P.string, function() calls = calls + 1; return "s" end)
-    local t = "hello"
-    sw:execute(t)
-    sw:execute(t)
-    eq(calls, 2, "pattern results must not be cached")
-end)
-
--- ══════════════════════════════════════════════════════════════════════════════
--- 9. Named registry
+-- 8. Named registry
 -- ══════════════════════════════════════════════════════════════════════════════
 
 section("Named registry")
@@ -415,7 +388,7 @@ test("duplicate name errors", function()
     EasySwitch("dup")
     local ok, err = pcall(function() EasySwitch("dup") end)
     is_true(not ok)
-    is_true(err:find("already registered") ~= nil)
+    is_true(type(err) == "string" and err:find("already registered") ~= nil)
     cleanup()
 end)
 
@@ -425,8 +398,8 @@ test("get() with no name returns all switches", function()
     EasySwitch("b")
     local all, count = EasySwitch.get()
     eq(count, 2)
-    is_true(all["a"] ~= nil)
-    is_true(all["b"] ~= nil)
+    is_true(type(all) == "table" and all["a"] ~= nil)
+    is_true(type(all) == "table" and all["b"] ~= nil)
     cleanup()
 end)
 
@@ -445,44 +418,36 @@ test("clear() removes all switches", function()
     EasySwitch("p")
     EasySwitch("q")
     EasySwitch.clear()
-    local all, count = EasySwitch.get()
+    local _, count = EasySwitch.get()
     eq(count, 0)
     cleanup()
 end)
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- 10. P.and_ / P.all_of
+-- 9. P.intersection (was P.and_ / P.all_of in v1)
 -- ══════════════════════════════════════════════════════════════════════════════
 
-section("Pattern: P.and_ / P.all_of")
+section("Pattern: P.intersection")
 
-test("P.and_ requires all patterns to match", function()
+test("P.intersection requires all patterns to match", function()
     local sw = new_sw()
-    sw:when(P.and_(P.number, P.when(function(v) return v > 0 end)),
+    sw:when(P.intersection(P.number, P.when(function(v) return v > 0 end)),
             function() return "positive-number" end)
     eq(sw:execute(5),   "positive-number")
     is_nil(sw:execute(-1))
     is_nil(sw:execute("5"))
 end)
 
-test("P.all_of is an alias for P.and_", function()
+test("P.intersection with literal + predicate", function()
     local sw = new_sw()
-    sw:when(P.all_of(P.integer, P.between(1, 10)), function() return "1-10" end)
-    eq(sw:execute(7),  "1-10")
-    is_nil(sw:execute(11))
-    is_nil(sw:execute(1.5))
-end)
-
-test("P.and_ with a literal value", function()
-    local sw = new_sw()
-    sw:when(P.and_("hello", P.when(function(v) return #v == 5 end)),
+    sw:when(P.intersection("hello", P.when(function(v) return #v == 5 end)),
             function() return "five-letter-hello" end)
     eq(sw:execute("hello"), "five-letter-hello")
     is_nil(sw:execute("world"))
 end)
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- 11. P.between
+-- 10. P.between
 -- ══════════════════════════════════════════════════════════════════════════════
 
 section("Pattern: P.between")
@@ -506,7 +471,7 @@ test("P.between rejects non-numbers", function()
 end)
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- 12. P.shape (strict table match)
+-- 11. P.shape (strict table match)
 -- ══════════════════════════════════════════════════════════════════════════════
 
 section("Pattern: P.shape")
@@ -536,35 +501,35 @@ test("P.shape vs partial match difference", function()
 end)
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- 13. P.string_match
+-- 12. P.luaPattern (was P.string_match in v1)
 -- ══════════════════════════════════════════════════════════════════════════════
 
-section("Pattern: P.string_match")
+section("Pattern: P.luaPattern")
 
-test("P.string_match matches Lua pattern", function()
+test("P.luaPattern matches Lua pattern", function()
     local sw = new_sw()
-    sw:when(P.string_match("^hello"), function() return "starts-hello" end)
+    sw:when(P.luaPattern("^hello"), function() return "starts-hello" end)
     eq(sw:execute("hello world"), "starts-hello")
     is_nil(sw:execute("say hello"))
 end)
 
-test("P.string_match rejects non-strings", function()
+test("P.luaPattern rejects non-strings", function()
     local sw = new_sw()
-    sw:when(P.string_match("%d+"), function() return "digits" end)
+    sw:when(P.luaPattern("%d+"), function() return "digits" end)
     is_nil(sw:execute(42))
 end)
 
-test("P.string_match — route-style matching", function()
+test("P.luaPattern — route-style matching", function()
     local sw = new_sw()
-    sw:when(P.string_match("^/api/"), function() return "api" end)
-    sw:when(P.string_match("^/web/"), function() return "web" end)
+    sw:when(P.luaPattern("^/api/"), function() return "api" end)
+    sw:when(P.luaPattern("^/web/"), function() return "web" end)
     eq(sw:execute("/api/users"), "api")
     eq(sw:execute("/web/home"),  "web")
     is_nil(sw:execute("/other"))
 end)
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- 14. Guards inline (:when 3-arg form)
+-- 13. Guards inline (:when 3-arg form with function)
 -- ══════════════════════════════════════════════════════════════════════════════
 
 section("Guards inline")
@@ -577,22 +542,16 @@ test("3-arg :when blocks when guard returns false", function()
     eq(sw:execute(-1), "other")
 end)
 
-test("guard on a literal value", function()
-    local sw = new_sw()
-    sw:when("hello", function(v) return #v == 5 end, function() return "five" end)
-    eq(sw:execute("hello"), "five")
-end)
-
 test("guard does not affect unrelated cases", function()
     local sw = new_sw()
-    sw:when("x", function() return false end, function() return "guarded-x" end)
-    sw:when("y",                              function() return "y"         end)
-    is_nil(sw:execute("x"))
+    sw:when(P.string, function(v) return v == "x" end, function() return "guarded-x" end)
+    sw:when("y",                                       function() return "y" end)
+    is_nil(sw:execute("z"))
     eq(sw:execute("y"), "y")
 end)
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- 15. Fallthrough
+-- 14. Fallthrough
 -- ══════════════════════════════════════════════════════════════════════════════
 
 section("Fallthrough")
@@ -632,13 +591,70 @@ test("FALLTHROUGH reaches default", function()
     eq(sw:execute("x"), "fell-to-default")
 end)
 
-test("noMatch does NOT fire when all cases fallthrough but something matched", function()
+test("noMatch does NOT fire when something matched then fell through", function()
     local no_match_fired = false
     local sw = new_sw()
     sw:on("noMatch", function() no_match_fired = true end)
     sw:when("x", function() return EasySwitch.FALLTHROUGH end)
     sw:execute("x")
     is_true(not no_match_fired)
+end)
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- 15. DSL strings in :when() (v2 feature)
+-- ══════════════════════════════════════════════════════════════════════════════
+
+section("DSL strings in :when()")
+
+test("DSL : quoted-literal union", function()
+    local sw = new_sw()
+    sw:when("'GET' | 'POST' | 'PUT'", function(v) return "write:" .. v end)
+    eq(sw:execute("GET"),  "write:GET")
+    eq(sw:execute("POST"), "write:POST")
+    is_nil(sw:execute("DELETE"))
+end)
+
+test("DSL : strict shape with scope", function()
+    local sw = new_sw()
+    sw:when("{| kind: 'click', x: Num, y: Num |}", { Num = P.number },
+            function() return "click" end)
+    eq(sw:execute({ kind = "click", x = 1, y = 2 }), "click")
+    is_nil(sw:execute({ kind = "click", x = 1, y = 2, z = 3 })) -- strict rejects extras
+    is_nil(sw:execute({ kind = "key", x = 1, y = 2 }))
+end)
+
+test("DSL : tuple pattern with scope", function()
+    local sw = new_sw()
+    sw:when("(Str, Num)", { Str = P.string, Num = P.number },
+            function() return "pair" end)
+    eq(sw:execute({ "hi", 42 }), "pair")
+    is_nil(sw:execute({ "hi" }))         -- length mismatch
+    is_nil(sw:execute({ 42, "hi" }))     -- types swapped
+end)
+
+test("plain string stays literal (no DSL trigger char)", function()
+    local sw = new_sw()
+    sw:when("GET", function() return "literal-get" end)
+    eq(sw:execute("GET"), "literal-get")
+end)
+
+test("string with `?` / `!` stays literal (operators inside string ignored)", function()
+    local sw = new_sw()
+    sw:when("hi!?", function() return "literal-1" end)
+    sw:when("what?", function() return "literal-2" end)
+    sw:when("hello!", function() return "literal-3" end)
+    eq(sw:execute("hi!?"),   "literal-1")
+    eq(sw:execute("what?"),  "literal-2")
+    eq(sw:execute("hello!"), "literal-3")
+end)
+
+test("DSL forced when scope table is passed (even no leading delim)", function()
+    local sw = new_sw()
+    sw:when("Str | Num", { Str = P.string, Num = P.number },
+            function() return "str-or-num" end)
+    eq(sw:execute("hi"), "str-or-num")
+    eq(sw:execute(42),   "str-or-num")
+    is_nil(sw:execute(true))
 end)
 
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -656,6 +672,142 @@ test("all builder methods return self", function()
         :before(function() return true end)
         :on("beforeExecute", function() end)
     is_true(result == sw)
+end)
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- 17. Memoize (opt-in cache)
+-- ══════════════════════════════════════════════════════════════════════════════
+
+section("Memoize (opt-in)")
+
+test(":memoize() — second call returns cached result without re-running action", function()
+    local calls = 0
+    local sw = new_sw():memoize()
+    sw:when("x", function() calls = calls + 1; return "y" end)
+    eq(sw:execute("x"), "y")
+    eq(sw:execute("x"), "y")
+    eq(calls, 1, "action ran exactly once")
+end)
+
+test(":memoize() OFF by default — every call re-runs action", function()
+    local calls = 0
+    local sw = new_sw()
+    sw:when("x", function() calls = calls + 1; return "y" end)
+    sw:execute("x")
+    sw:execute("x")
+    eq(calls, 2, "no cache by default")
+end)
+
+test(":clearCache() forces re-execution after enable", function()
+    local calls = 0
+    local sw = new_sw():memoize()
+    sw:when("x", function() calls = calls + 1; return "y" end)
+    sw:execute("x")
+    sw:clearCache()
+    sw:execute("x")
+    eq(calls, 2)
+end)
+
+test(":clearCache() is a no-op when memoize is OFF", function()
+    local sw = new_sw()
+    sw:clearCache() -- must not error
+    is_true(true)
+end)
+
+test("memoize : pattern hit IS cached (v2 semantics, not v1)", function()
+    local calls = 0
+    local sw = new_sw():memoize()
+    sw:when(P.string, function(v) calls = calls + 1; return "s:" .. v end)
+    sw:execute("hi")
+    sw:execute("hi")
+    eq(calls, 1, "pattern result cached too")
+end)
+
+test("memoize : nil result not cached (avoid poisoning new rules)", function()
+    local calls = 0
+    local sw = new_sw():memoize()
+    sw:when("x", function() return "y" end)
+    sw:execute("z") -- no match → nil, not cached
+    sw:when("z", function() calls = calls + 1; return "z-result" end)
+    eq(sw:execute("z"), "z-result")
+    eq(calls, 1)
+end)
+
+test("memoize : :when() invalidates the cache", function()
+    local sw = new_sw():memoize()
+    sw:when("x", function() return "first" end)
+    eq(sw:execute("x"), "first") -- caches "first"
+    sw:when("x", function() return "second" end) -- overwrites + invalidates
+    eq(sw:execute("x"), "second") -- cache cleared, dispatches with new action
+end)
+
+test("memoize : :default() invalidates the cache", function()
+    local sw = new_sw():memoize()
+    sw:execute("nope") -- no rules, no default → nil → not cached
+    sw:default(function() return "fallback" end)
+    eq(sw:execute("nope"), "fallback")
+end)
+
+test("memoize : :use() invalidates the cache", function()
+    local calls = 0
+    local sw = new_sw():memoize()
+    sw:when("X", function() calls = calls + 1; return "ok" end)
+    eq(sw:execute("x"), nil) -- no match initially (no middleware to upper)
+    sw:use(function(v) return string.upper(v) end)
+    eq(sw:execute("x"), "ok") -- now upper("x")="X" matches
+    eq(calls, 1)
+end)
+
+test("memoize : :before() invalidates the cache", function()
+    local sw = new_sw():memoize()
+    sw:when("x", function() return "y" end)
+    eq(sw:execute("x"), "y")
+    sw:before(function() return false end)
+    eq(sw:execute("x"), nil) -- gate now blocks
+end)
+
+test("memoize : verify mode catches non-deterministic action", function()
+    local i = 0
+    local sw = new_sw():memoize({ verify = true })
+    sw:when("x", function() i = i + 1; return "result-" .. i end)
+    eq(sw:execute("x"), "result-1") -- caches "result-1"
+    local ok, err = pcall(function() sw:execute("x") end)
+    is_true(not ok, "should error on non-deterministic action")
+    is_true(type(err) == "string" and err:find("Memoize verify failed") ~= nil)
+end)
+
+test("memoize : verify mode passes for deterministic action", function()
+    local sw = new_sw():memoize({ verify = true })
+    sw:when("x", function() return "stable" end)
+    eq(sw:execute("x"), "stable")
+    eq(sw:execute("x"), "stable") -- verify re-runs, finds same value, no error
+    eq(sw:execute("x"), "stable")
+end)
+
+test("memoize : NaN values pass through without caching", function()
+    local sw = new_sw():memoize()
+    local nan = 0/0
+    sw:when(P.when(function(v) return v ~= v end), function() return "is-nan" end)
+    eq(sw:execute(nan), "is-nan")
+    eq(sw:execute(nan), "is-nan") -- works without table-NaN-key error
+end)
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- 18. Shared metatable (memory : multiple instances must share methods)
+-- ══════════════════════════════════════════════════════════════════════════════
+
+section("Architecture")
+
+test("multiple instances share the same metatable", function()
+    local a, b = EasySwitch.new(), EasySwitch.new()
+    is_true(getmetatable(a) == getmetatable(b), "metatable identity")
+end)
+
+test("matchigo Map / Set / BigInt are exposed", function()
+    is_true(type(EasySwitch.Map)    == "table")
+    is_true(type(EasySwitch.Set)    == "table")
+    is_true(type(EasySwitch.BigInt) == "table")
+    is_true(type(EasySwitch.parsePattern) == "function")
 end)
 
 -- ══════════════════════════════════════════════════════════════════════════════

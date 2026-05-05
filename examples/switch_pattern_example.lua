@@ -1,4 +1,6 @@
--- Pattern matching example — run from project root: lua examples/switch_pattern_example.lua
+-- Pattern matching with EasySwitch. Run from project root :
+--   lua examples/switch_pattern_example.lua
+
 local EasySwitch = require("easyswitch")
 local P = EasySwitch.P
 
@@ -40,9 +42,9 @@ print(coerce:execute(nil))      -- "(nil)"
 -- ── Guard with P.when ─────────────────────────────────────────────────────────
 
 local classify = EasySwitch.new()
-    :when(P.when(function(n) return n < 0    end), function() return "negative" end)
-    :when(P.when(function(n) return n == 0   end), function() return "zero"     end)
-    :when(P.when(function(n) return n > 0    end), function() return "positive" end)
+    :when(P.when(function(n) return type(n) == "number" and n < 0  end), function() return "negative" end)
+    :when(P.when(function(n) return n == 0                          end), function() return "zero"     end)
+    :when(P.when(function(n) return type(n) == "number" and n > 0  end), function() return "positive" end)
     :default(function() return "not a number" end)
 
 print("\n=== Classify numbers ===")
@@ -51,10 +53,10 @@ print(classify:execute(0))    -- zero
 print(classify:execute(10))   -- positive
 print(classify:execute("x"))  -- not a number
 
--- ── Union and negation ────────────────────────────────────────────────────────
+-- ── Union (hash O(1)) and negation ────────────────────────────────────────────
 
 local role = EasySwitch.new()
-    :when(P.any_of("admin", "moderator"), function() return "privileged" end)
+    :when(P.union("admin", "moderator"), function() return "privileged" end)
     :when(P.not_(P.string),               function() return "invalid role" end)
     :default(function(v) return "user: " .. v end)
 
@@ -67,17 +69,32 @@ print(role:execute(42))           -- invalid role
 -- ── Homogeneous array ─────────────────────────────────────────────────────────
 
 local sum_ints = EasySwitch.new()
-    :when(P.array(P.integer), function(arr)
+    :when(P.arrayOf(P.integer, { min = 1 }), function(arr)
         local s = 0
         for _, v in ipairs(arr) do s = s + v end
         return s
     end)
-    :default(function() return "not an int array" end)
+    :default(function() return "not a non-empty int array" end)
 
 print("\n=== Sum int arrays ===")
-print(sum_ints:execute({ 1, 2, 3, 4 }))       -- 10
-print(sum_ints:execute({ 1, 2.5, 3 }))         -- not an int array
-print(sum_ints:execute("hello"))               -- not an int array
+print(sum_ints:execute({ 1, 2, 3, 4 }))  -- 10
+print(sum_ints:execute({ 1, 2.5, 3 }))   -- not a non-empty int array
+print(sum_ints:execute("hello"))          -- not a non-empty int array
+print(sum_ints:execute({}))               -- not a non-empty int array (min=1 forbids empty)
+
+-- ── DSL strings : strict shape with scope ─────────────────────────────────────
+
+print("\n=== DSL strict shape ===")
+local handle_event = EasySwitch.new()
+    :when("{| kind: 'click', x: Num, y: Num |}", { Num = P.number },
+          function(e) return ("click at %d,%d"):format(e.x, e.y) end)
+    :when("{| kind: 'key', code: Num |}", { Num = P.number },
+          function(e) return "key " .. e.code end)
+    :default(function() return "unhandled event" end)
+
+print(handle_event:execute({ kind = "click", x = 10, y = 20 }))             -- click at 10,20
+print(handle_event:execute({ kind = "key", code = 27 }))                    -- key 27
+print(handle_event:execute({ kind = "click", x = 1, y = 2, extra = "no" })) -- unhandled event (strict refuses extras)
 
 -- ── Nested table pattern + middleware + events ────────────────────────────────
 
@@ -93,8 +110,7 @@ local handle = EasySwitch.new()
     end)
     :when({ status = 200 }, function(r) return "OK: " .. (r.body or "") end)
     :when({ status = 404 }, function()  return "Not Found" end)
-    :when({ status = P.when(function(s) return s >= 500 end) },
-          function(r) return "Server Error " .. r.status end)
+    :when({ status = P.gte(500) }, function(r) return "Server Error " .. r.status end)
     :default(function(r) return "Unhandled status: " .. r.status end)
 
 print(handle:execute({ status = 200, body = "hello" }))  -- OK: hello

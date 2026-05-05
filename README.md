@@ -1,434 +1,64 @@
 # EasySwitchLua
 
-A performant switch/pattern-matching library for Lua with middleware, events, caching, and structural dispatch.
+[![CI](https://github.com/Kamionn/EasySwitchLua/actions/workflows/ci.yml/badge.svg)](https://github.com/Kamionn/EasySwitchLua/actions/workflows/ci.yml) [![version](https://img.shields.io/github/v/tag/Kamionn/EasySwitchLua?label=version&color=orange&sort=semver)](https://github.com/Kamionn/EasySwitchLua/tags) [![focus](https://img.shields.io/badge/focus-Switch%20%2F%20Dispatcher-purple)](https://img.shields.io/badge/focus-Switch%20%2F%20Dispatcher-purple) [![lang](https://img.shields.io/badge/lang-Lua%205.1%2B%20%2F%20LuaJIT%20%2F%20Luau-green)](https://img.shields.io/badge/lang-Lua%205.1%2B%20%2F%20LuaJIT%20%2F%20Luau-green) [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+
+A builder-style switch / pattern-matching library for Lua with middleware, events, opt-in memoize, and structural dispatch. Built on top of [matchigo-lua](https://github.com/SUP2Ak/matchigo-lua) (vendored in the bundle) for pattern-test logic and the optional Rust-style DSL.
 
 Works on standard Lua 5.1+, LuaJIT, FiveM, Roblox (Luau), and LÖVE2D.
 
+📖 **[Full documentation in `docs/`](docs/README.md)** — installation, API reference, guides, examples, v1→v2 migration.
+
 ---
 
-## Installation
+## Install
 
-### Standard Lua
+> [!WARNING]
+> **Download the named release asset, not "Source code (zip)"** — the source archive does not include the bundled dist (`dist/` is gitignored).
+
+Grab `EasySwitchLua-vX.Y.Z.zip` from the [Releases page](https://github.com/Kamionn/EasySwitchLua/releases), extract `easyswitch.lua`, then :
 
 ```lua
 local EasySwitch = require("easyswitch")
 ```
 
-### FiveM
-
-Build a single bundled file (no `require` calls, runs anywhere):
-
-```bash
-lua build.lua
-# → generates dist/easyswitch.lua
-```
-
-Copy `dist/easyswitch.lua` into your resource, then in `fxmanifest.lua`:
-
-```lua
-shared_scripts {
-    'easyswitch.lua',
-    'client.lua',
-    'server.lua',
-}
-```
-
-`EasySwitch` is then available in all your scripts without any `require`.
-
-### Roblox
-
-1. Run `lua build.lua` to generate `dist/easyswitch.lua`.
-2. In Roblox Studio, create a `ModuleScript` in `ReplicatedStorage` named `EasySwitch`.
-3. Paste the full content of `dist/easyswitch.lua` into it.
-4. Use it from any script:
-
-```lua
-local EasySwitch = require(game.ReplicatedStorage.EasySwitch)
-
-local sw = EasySwitch.new()
-    :when("attack", function() print("attacking!") end)
-    :when("defend", function() print("defending!") end)
-    :default(function(v) print("unknown action:", v) end)
-
-sw:execute("attack")
-```
-
-The bundled file has no external `require()` calls and is fully compatible with Luau's sandbox.
-
-### LÖVE2D
-
-Copy the `src/` folder and `easyswitch.lua` into your LÖVE project (or use the single bundled `dist/easyswitch.lua`):
-
-```lua
--- main.lua
-local EasySwitch = require("easyswitch")
-
-local gameState = EasySwitch.new()
-    :when("menu",  function() -- draw menu  end)
-    :when("game",  function() -- draw game  end)
-    :when("pause", function() -- draw pause end)
-
-function love.keypressed(key)
-    if key == "escape" then gameState:execute("pause") end
-end
-```
-
-LÖVE runs on LuaJIT (Lua 5.1) — no configuration needed, everything works out of the box.
+FiveM / Roblox / LÖVE2D specifics — see **[docs/installation.md](docs/installation.md)**.
 
 ---
 
-## Two modes: anonymous and named
-
-```lua
--- Anonymous (recommended) — zero global state
-local sw = EasySwitch.new()
-
--- Named registry — accessible from anywhere by name
-local sw = EasySwitch("menu")
-local sw = EasySwitch.get("menu")  -- retrieve it later
-```
-
----
-
-## Basic usage
-
-```lua
-local EasySwitch = require("easyswitch")
-
-local sw = EasySwitch.new()
-    :when("start", function() return "Game started" end)
-    :when("quit",  function() return "Game ended"   end)
-    :default(function(v) return "Unknown: " .. v    end)
-
-sw:execute("start")  -- "Game started"
-sw:execute("quit")   -- "Game ended"
-sw:execute("other")  -- "Unknown: other"
-```
-
-### Multiple literals, one action
-
-```lua
-sw:when({"save", "backup"}, function(v) return "Saving..." end)
-```
-
----
-
-## Pattern matching
-
-```lua
-local P = EasySwitch.P
-```
-
-### Type sentinels
-
-| Pattern | Matches |
-|---|---|
-| `P.string` | any string |
-| `P.number` | any number |
-| `P.boolean` | `true` or `false` |
-| `P.integer` | whole numbers |
-| `P.float` | decimal numbers |
-| `P.table` | any table |
-| `P.func` | any function |
-| `P.nil_` | `nil` |
-| `P.any` | everything |
-
-```lua
-sw:when(P.string,  function(v) return "got string: " .. v end)
-sw:when(P.integer, function(v) return "got int: " .. v    end)
-sw:when(P.float,   function(v) return "got float: " .. v  end)
-```
-
-### P.when — arbitrary predicate
-
-```lua
-sw:when(P.when(function(v) return v > 0 end), function() return "positive" end)
-```
-
-### P.any_of — union
-
-```lua
-sw:when(P.any_of("red", "green", "blue"), function(v) return "color: " .. v end)
-sw:when(P.any_of(P.integer, P.string),    function() return "int or string"  end)
-```
-
-### P.not_ — negation
-
-```lua
-sw:when(P.not_(P.string), function() return "not a string" end)
-```
-
-### P.and_ / P.all_of — intersection
-
-All patterns must match:
-
-```lua
-sw:when(P.and_(P.number, P.when(function(v) return v > 0 end)),
-        function() return "positive number" end)
-
--- P.all_of is an alias
-sw:when(P.all_of(P.integer, P.between(1, 100)),
-        function() return "integer between 1 and 100" end)
-```
-
-### P.between — numeric range (inclusive)
-
-```lua
-sw:when(P.between(1, 10),  function() return "low"    end)
-sw:when(P.between(11, 20), function() return "medium" end)
-sw:when(P.between(21, 99), function() return "high"   end)
-```
-
-### P.array — homogeneous array
-
-Matches a non-empty sequential table where every element matches the given pattern:
-
-```lua
-sw:when(P.array(P.number), function() return "array of numbers" end)
-sw:when(P.array(P.string), function() return "array of strings" end)
-```
-
-### P.string_match — Lua pattern on strings
-
-```lua
-sw:when(P.string_match("^/api/"), function() return "api route"  end)
-sw:when(P.string_match("^/web/"), function() return "web route"  end)
-sw:when(P.string_match("%d+"),    function() return "has digits"  end)
-```
-
-### Partial table matching
-
-A plain table with string keys acts as a partial matcher — extra keys are ignored:
-
-```lua
-sw:when({ kind = "circle" }, function(s) return math.pi * s.r ^ 2 end)
-sw:when({ kind = "square" }, function(s) return s.side ^ 2         end)
-
-sw:execute({ kind = "circle", r = 5 })  -- 78.539...
-```
-
-Patterns can be nested:
-
-```lua
-sw:when({ pos = { x = P.number, y = P.number } }, function() return "vec2" end)
-```
-
-### P.shape — strict table matching
-
-Like partial matching, but rejects tables with extra keys:
-
-```lua
--- partial: { active=true, score=100 } would match
-sw:when({ active = true }, function() return "partial" end)
-
--- strict: { active=true, score=100 } does NOT match
-sw:when(P.shape({ active = true }), function() return "strict" end)
-```
-
----
-
-## Guards
-
-3-argument `:when(pattern, guard, action)` — the guard receives the value and must return `true` for the action to run:
-
-```lua
-sw:when(P.number, function(v) return v > 0  end, function() return "positive" end)
-sw:when(P.number, function(v) return v <= 0 end, function() return "non-positive" end)
-
--- Also works on literals
-sw:when("hello", function(v) return #v == 5 end, function() return "five-letter hello" end)
-```
-
----
-
-## Fallthrough
-
-Return `EasySwitch.FALLTHROUGH` from an action to continue matching subsequent cases:
-
-```lua
-local sw = EasySwitch.new()
-
-sw:when("hello", function()
-    print("intercepted hello")
-    return EasySwitch.FALLTHROUGH  -- continue to next match
-end)
-sw:when(P.string, function(v)
-    return "string: " .. v
-end)
-
-sw:execute("hello")
--- prints "intercepted hello"
--- returns "string: hello"
-```
-
----
-
-## Middleware
-
-Middleware transforms the value before dispatch. Errors inside a middleware are caught and the original value is used as fallback:
-
-```lua
-local sw = EasySwitch.new()
-    :use(function(v) return string.upper(v) end)
-    :when("HELLO", function() return "matched" end)
-
-sw:execute("hello")  -- "matched"
-```
-
-Multiple middlewares chain in order:
-
-```lua
-sw:use(function(v) return v:gsub("%s+", "_") end)  -- spaces → underscores
-sw:use(function(v) return string.lower(v)    end)  -- lowercase
-```
-
----
-
-## Before check
-
-Gates the entire execution — if the check returns `false`, `execute` returns `nil` immediately:
-
-```lua
-local sw = EasySwitch.new()
-    :before(function(v) return type(v) == "string" end)
-    :when("ok", function() return "passed" end)
-
-sw:execute("ok")   -- "passed"
-sw:execute(42)     -- nil (before check failed)
-```
-
----
-
-## Events
-
-```lua
-sw:on("beforeExecute",     function(value)          end)
-sw:on("afterExecute",      function(value, result)   end)
-sw:on("error",             function(origin, message) end)
-sw:on("cacheHit",          function(value, result)   end)
-sw:on("cacheMiss",         function(value)           end)
-sw:on("middlewareStart",   function(value)           end)
-sw:on("middlewareEnd",     function(result)          end)
-sw:on("noMatch",           function(value)           end)
-sw:on("beforeCheckFailed", function(value)           end)
-```
-
-Example — logging:
-
-```lua
-local sw = EasySwitch.new()
-    :on("beforeExecute", function(v)    print("in  →", v)          end)
-    :on("afterExecute",  function(v, r) print("out →", r)          end)
-    :on("noMatch",       function(v)    print("no match for", v)    end)
-    :on("error",         function(o, e) print("error in", o, ":", e) end)
-```
-
----
-
-## Caching
-
-Literal dispatch results are cached automatically (weak-key table, GC-friendly). Pattern results are never cached.
-
-```lua
-sw:when("calc", function()
-    -- runs once, result cached on subsequent calls
-    local r = 0
-    for i = 1, 1e6 do r = r + i end
-    return r
-end)
-
-sw:execute("calc")  -- computed
-sw:execute("calc")  -- from cache
-```
-
-Clear the cache manually:
-
-```lua
-sw:clearCache()
-```
-
----
-
-## Named registry
-
-```lua
--- Create
-local sw = EasySwitch("my-switch")
-
--- Retrieve by name
-local sw = EasySwitch.get("my-switch")
-
--- Get all registered switches
-local all, count = EasySwitch.get()
-
--- Remove one
-EasySwitch.clear("my-switch")
-
--- Remove all
-EasySwitch.clear()
-```
-
----
-
-## Configuration
-
-```lua
-local sw = EasySwitch.new({ maxCases = 500 })
--- or
-local sw = EasySwitch("name", { maxCases = 500 })
-```
-
-| Option | Default | Description |
-|---|---|---|
-| `maxCases` | `100` | Maximum number of registered cases |
-
----
-
-## Full example — LÖVE2D game state machine
+## Quickstart
 
 ```lua
 local EasySwitch = require("easyswitch")
 local P = EasySwitch.P
 
-local state = EasySwitch.new()
-    :on("noMatch", function(v) print("[warn] unknown state:", v) end)
-    :when("menu",  function() love.graphics.print("MENU",  10, 10) end)
-    :when("game",  function() love.graphics.print("GAME",  10, 10) end)
-    :when("over",  function() love.graphics.print("GAME OVER", 10, 10) end)
-    :default(function() love.graphics.print("???", 10, 10) end)
+local router = EasySwitch.new()
+    :when("GET",                       function()  return "list"          end)
+    :when({"POST", "PUT"},             function(m) return "write:" .. m   end)
+    :when(P.union("DELETE", "PATCH"),  function(m) return "modify:" .. m  end)
+    :when(P.string,                    function(v) return "str:"  .. v    end)
+    :default(function(v)               return "unhandled: " .. tostring(v) end)
 
-local current = "menu"
-
-function love.draw()
-    state:execute(current)
-end
-
-function love.keypressed(key)
-    if key == "return" and current == "menu" then current = "game"
-    elseif key == "escape"                   then current = "over"
-    end
-end
+print(router:execute("GET"))    -- list
+print(router:execute("POST"))   -- write:POST
+print(router:execute("hello"))  -- str:hello
+print(router:execute(42))       -- unhandled: 42
 ```
+
+→ **[Getting started](docs/getting-started.md)** for a 5-minute walkthrough, **[API reference](docs/api/)** for the full surface.
 
 ---
 
-## Full example — FiveM job dispatch
+## Features
 
-```lua
-local P = EasySwitch.P
+- **[Pattern matching](docs/guides/pattern-matching.md)** — type sentinels, unions, intersections, shapes, ranges, predicates
+- **[DSL strings](docs/guides/dsl-strings.md)** — Rust-style match arms inside `:when()`, parsed once at construction
+- **[Middleware](docs/guides/middleware.md)** — chain transforms before dispatch with `:use(fn)`
+- **[Events](docs/api/events.md)** — 7 hooks (`beforeExecute`, `afterExecute`, `noMatch`, `error`, ...)
+- **[Memoize](docs/guides/memoize.md)** — opt-in result caching with optional verify mode
+- **[Fallthrough](docs/guides/fallthrough.md)** — `EasySwitch.FALLTHROUGH` sentinel for layered rules
+- **[Named registry](docs/guides/named-registry.md)** — `EasySwitch("name")` for cross-module dispatchers
 
-local jobSwitch = EasySwitch.new()
-    :when(P.string_match("^police"),  function(job) return "PD — " .. job   end)
-    :when(P.string_match("^mechanic"),function(job) return "Garage — " .. job end)
-    :when(P.any_of("ambulance", "doctor"), function() return "EMS"          end)
-    :when(P.and_(P.string, P.when(function(v) return #v > 0 end)),
-          function(job) return "Civilian — " .. job end)
-    :default(function() return "No job" end)
-
-jobSwitch:execute("police_lspd")  -- "PD — police_lspd"
-jobSwitch:execute("ambulance")    -- "EMS"
-jobSwitch:execute("baker")        -- "Civilian — baker"
-```
+Coming from EasySwitchLua v1 (cache + actionManager era) ? See **[Migration v1 → v2](docs/migration-v1-to-v2.md)**.
 
 ---
 
