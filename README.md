@@ -10,6 +10,7 @@ Works on standard Lua 5.1+, LuaJIT, FiveM, Roblox (Luau), and LÖVE2D.
 
 ---
 
+
 ## Install
 
 > [!WARNING]
